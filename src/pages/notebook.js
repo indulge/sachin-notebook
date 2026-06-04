@@ -92,7 +92,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading, onRefr
           onClick={onRefresh}
           disabled={loading || refreshing}
           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '0 2px', opacity: (loading || refreshing) ? 0.4 : 0.7, lineHeight: 1 }}
-          title="Refresh everything"
+          title="Refresh all"
         >
           {refreshing ? '⟳' : '↻'}
         </button>
@@ -127,7 +127,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading, onRefr
 
 // ── Note list ───────────────────────────────────────────────────────────────
 
-function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, onRefresh, syncing, syncProgress, metadata, loadingNote }) {
+function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, syncing, syncProgress, metadata, loadingNote }) {
   const [confirmingDelete, setConfirmingDelete] = useState(null);
 
   const handleDeleteClick = (e, note) => {
@@ -150,10 +150,7 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
     <div style={s.panel}>
       <div style={s.panelHeader}>
         <span style={{ fontWeight: 600, fontSize: 16 }}>{notebook.name}</span>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={onRefresh} disabled={loading} style={{ ...s.btn, ...s.btnGhost }} title="Refresh">↻</button>
-          <button onClick={onNewNote} style={{ ...s.btn, ...s.btnPrimary }}>+ New Note</button>
-        </div>
+        <button onClick={onNewNote} style={{ ...s.btn, ...s.btnPrimary }}>+ New Note</button>
       </div>
       <div style={s.syncBarTrack}>
         <div style={{
@@ -203,12 +200,23 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
 
 // ── Note editor ─────────────────────────────────────────────────────────────
 
-function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', saving, status, conflictBanner, onClearConflict }) {
+function NoteEditor({ onBack, onSave, notebookName = '', initialTitle = '', initialContent = '', saving, status, conflictBanner, onClearConflict }) {
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [renderMode, setRenderMode] = useState(false);
   const [discardConfirm, setDiscardConfirm] = useState(false);
   const textareaRef = useRef(null);
+
+  // Baseline = last persisted state. Resyncs when the parent pushes new saved
+  // values (after a successful save), which clears the "unsaved" indicator.
+  const [baseTitle, setBaseTitle] = useState(initialTitle);
+  const [baseContent, setBaseContent] = useState(initialContent);
+  useEffect(() => {
+    setBaseTitle(initialTitle);
+    setBaseContent(initialContent);
+  }, [initialTitle, initialContent]);
+
+  const isDirty = title !== baseTitle || content !== baseContent;
 
   useEffect(() => {
     if (!renderMode && textareaRef.current) textareaRef.current.focus();
@@ -218,54 +226,65 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (!saving) onSave(title, content);
+        if (!saving && isDirty) onSave(title, content);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [title, content, saving, onSave]);
+  }, [title, content, saving, isDirty, onSave]);
+
+  const handleExit = () => {
+    if (isDirty) setDiscardConfirm(true);
+    else onBack();
+  };
 
   return (
     <div style={s.panel}>
       <div style={s.panelHeader}>
-        <button onClick={onBack} style={{ ...s.btn, ...s.btnGhost }}>← Back</button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <button
-            onClick={() => setRenderMode(m => !m)}
-            style={{ ...s.btn, ...(renderMode ? s.btnToggleOn : s.btnToggleOff) }}
-          >
-            <span style={s.toggleDot(renderMode)} />
-            Render Markdown
-          </button>
-          <span style={s.btnSeparator} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          <button onClick={handleExit} style={{ ...s.btn, ...s.btnGhost, flexShrink: 0 }}>← Notes</button>
+          <div style={s.breadcrumb}>
+            {notebookName && <><span style={s.crumbMuted}>{notebookName}</span><span style={s.crumbSep}>›</span></>}
+            <span style={s.crumbCurrent}>{title.trim() || 'Untitled'}</span>
+            {isDirty && <span style={s.unsavedBadge}><span style={s.unsavedDot} />unsaved</span>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {discardConfirm ? (
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               <span style={{ fontSize: 12, color: 'var(--ifm-color-emphasis-600)' }}>Discard unsaved changes?</span>
               <button onClick={onBack} style={{ ...s.btn, ...s.btnDanger, padding: '3px 10px', fontSize: 12 }}>Discard</button>
-              <button onClick={() => setDiscardConfirm(false)} style={{ ...s.btn, ...s.btnGhost, padding: '3px 10px', fontSize: 12 }}>Cancel</button>
+              <button onClick={() => setDiscardConfirm(false)} style={{ ...s.btn, ...s.btnGhost, padding: '3px 10px', fontSize: 12 }}>Keep editing</button>
             </span>
           ) : (
             <>
-              <button onClick={() => setDiscardConfirm(true)} style={{ ...s.btn, ...s.btnGhost }}>Discard changes</button>
+              <div style={s.segmented}>
+                <button
+                  onClick={() => setRenderMode(false)}
+                  style={{ ...s.segment, ...(!renderMode ? s.segmentActive : {}) }}
+                >
+                  ✎ Edit
+                </button>
+                <button
+                  onClick={() => setRenderMode(true)}
+                  style={{ ...s.segment, ...(renderMode ? s.segmentActive : {}) }}
+                >
+                  👁 Preview
+                </button>
+              </div>
               <span style={s.btnSeparator} />
               <button
                 onClick={() => onSave(title, content)}
-                disabled={saving}
-                style={{ ...s.btn, ...s.btnPrimary }}
+                disabled={saving || !isDirty}
+                style={{ ...s.btn, ...(isDirty ? s.btnPrimary : s.btnSaved) }}
               >
-                {saving ? 'Saving…' : 'Save Note'}
+                {saving ? 'Saving…' : isDirty ? 'Save Note' : '✓ Saved'}
               </button>
             </>
           )}
         </div>
       </div>
       <div style={s.editorBody}>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Note title"
-          style={{ ...s.input, ...s.titleInput }}
-        />
         {conflictBanner && (
           <div style={s.conflictBanner}>
             <span>⚠️ Merge conflict detected. The file was updated remotely. The latest SHA has been loaded and your edits are preserved — review and save again.</span>
@@ -285,19 +304,28 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
               const ReactMarkdown = require('react-markdown').default;
               return (
                 <div style={s.markdownPreview}>
+                  <h1 style={s.previewTitle}>{title.trim() || 'Untitled'}</h1>
                   <ReactMarkdown>{content}</ReactMarkdown>
                 </div>
               );
             }}
           </BrowserOnly>
         ) : (
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={e => setContent(e.target.value)}
-            placeholder="Write your note in Markdown…"
-            style={s.textarea}
-          />
+          <>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Note title"
+              style={{ ...s.input, ...s.titleInput }}
+            />
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              placeholder="Write your note in Markdown…"
+              style={s.textarea}
+            />
+          </>
         )}
       </div>
     </div>
@@ -325,7 +353,7 @@ function NewNotebookPanel({ onCreate, onCancel, saving, status }) {
           autoFocus
         />
         <p style={{ margin: '0 0 20px', fontSize: 13, color: 'var(--ifm-color-emphasis-600)' }}>
-          This will create a folder <code>docs/{slugify(name || 'notebook-name')}/</code> in your repository.
+          Notebooks group related notes together.
         </p>
         {status && <p style={s.statusText}>{status}</p>}
         <button
@@ -673,12 +701,6 @@ export default function NotebookPage() {
     }
   };
 
-  const refreshNotebook = () => {
-    if (!selectedNotebook) return;
-    fetchNotes(selectedNotebook);
-    fetchMetadata(selectedNotebook);
-  };
-
   const refreshAll = async () => {
     setRefreshing(true);
     setRefreshProgress(0);
@@ -831,7 +853,11 @@ export default function NotebookPage() {
       const resData = await res.json();
       if (resData.content?.sha) {
         expectedSha = resData.content.sha;
-        setEditingNote(prev => prev ? { ...prev, sha: expectedSha } : null);
+        // Persist the saved title/content as the new baseline so the editor
+        // clears its "unsaved" state; also promotes a new note to an opened one.
+        setEditingNote(prev => prev
+          ? { ...prev, sha: expectedSha, title, content }
+          : { path: filePath, sha: expectedSha, title, content });
       }
     } catch {}
 
@@ -953,6 +979,7 @@ export default function NotebookPage() {
               key={editingNote ? `${editingNote.path}-${editingNote._refreshKey ?? 0}` : 'new'}
               onBack={() => setView('list')}
               onSave={saveNote}
+              notebookName={selectedNotebook?.name ?? ''}
               initialTitle={editingNote?.title ?? ''}
               initialContent={editingNote?.content ?? ''}
               saving={saving}
@@ -969,7 +996,6 @@ export default function NotebookPage() {
               onNewNote={openNewNote}
               onOpenNote={openNote}
               onDeleteNote={deleteNote}
-              onRefresh={refreshNotebook}
               metadata={notebookMetadata}
               loadingNote={loadingNote}
               syncing={syncing}
@@ -1181,6 +1207,79 @@ const s = {
     backgroundColor: '#e53e3e',
     color: '#fff',
     borderColor: '#e53e3e',
+  },
+  btnSaved: {
+    backgroundColor: 'transparent',
+    color: 'var(--ifm-color-emphasis-500)',
+    borderColor: 'var(--ifm-color-emphasis-300)',
+    cursor: 'default',
+  },
+  breadcrumb: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 8,
+    minWidth: 0,
+    fontSize: 14,
+  },
+  crumbMuted: {
+    color: 'var(--ifm-color-emphasis-500)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    maxWidth: 160,
+    flexShrink: 0,
+  },
+  crumbSep: { color: 'var(--ifm-color-emphasis-400)', flexShrink: 0 },
+  crumbCurrent: {
+    fontWeight: 600,
+    color: 'var(--ifm-font-color-base)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+  },
+  unsavedBadge: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 0,
+    fontSize: 11,
+    fontWeight: 600,
+    color: '#b45309',
+    backgroundColor: 'rgba(245,158,11,0.14)',
+    borderRadius: 10,
+    padding: '2px 8px',
+  },
+  unsavedDot: {
+    width: 6,
+    height: 6,
+    borderRadius: '50%',
+    backgroundColor: '#d97706',
+  },
+  segmented: {
+    display: 'inline-flex',
+    border: '1px solid var(--ifm-color-emphasis-300)',
+    borderRadius: 6,
+    overflow: 'hidden',
+  },
+  segment: {
+    padding: '6px 12px',
+    border: 'none',
+    background: 'transparent',
+    cursor: 'pointer',
+    fontSize: 13,
+    fontWeight: 500,
+    color: 'var(--ifm-color-emphasis-600)',
+    lineHeight: 1.4,
+  },
+  segmentActive: {
+    backgroundColor: 'var(--ifm-color-primary)',
+    color: '#fff',
+  },
+  previewTitle: {
+    marginTop: 0,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottom: '1px solid var(--ifm-color-emphasis-200)',
   },
   editorBody: {
     flex: 1,
