@@ -1,22 +1,11 @@
-# Claude Code Basics: An Interactive Tutorial
+# Sachin's Public Notebook
 
-> **How to use this file**: Paste the prompt blocks marked with ▶ into Claude Code one at a time.
-> Each prompt builds on the previous step, creating a working mini-project as you go.
-> By the end you will have built the same structure as this project — from scratch.
+Notes, tutorials, and references — mostly on AI, tooling, and software engineering.
 
 ---
 
-## Overview: The Five Building Blocks
+## Claude Code
 
-Claude Code has five core extension points:
+### [Claude Code Basics: An Interactive Tutorial](claude-notes/claude-workshop-1.md)
 
-| Concept | What it is | Where it lives |
-|---|---|---|
-| **Tool** | A Python (or any) script that does deterministic work | `tools/` |
-| **Workflow** | A markdown SOP that tells Claude which tools to run and how | `workflows/` |
-| **Command** | A `/slash-command` that users type in Claude Code | `.claude/commands/` |
-| **Skill** | A self-contained capability with its own assets and scripts | `.claude/skills/<name>/` |
-| **Hook** | A shell command that fires automatically on lifecycle events | `.claude/settings.json` |
-
-The mental model: **Hooks** start or end work automatically. **Commands** are how users trigger tasks. **Skills** are packaged capabilities. **Workflows** describe the steps. **Tools** do the actual execution.
-
+A hands-on walkthrough of the five Claude Code extension points — Tools, Workflows, Commands, Skills, and Hooks. Each section explains the concept, shows a real example from a working project, and includes a ready-to-paste prompt so you can build it yourself. By the end you have a fully wired weather + quote project that demonstrates all five patterns working together.
