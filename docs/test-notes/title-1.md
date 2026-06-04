@@ -1,5 +1,3 @@
-
-
 Header 1
 
 text under header 1
