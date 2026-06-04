@@ -184,11 +184,11 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
 
 // ── Note editor ─────────────────────────────────────────────────────────────
 
-function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', saving, status, conflictBanner, onClearConflict }) {
-  const [title, setTitle] = useState(initialTitle);
+function NoteEditor({ onBack, onSave, initialContent = '', saving, status, conflictBanner, onClearConflict }) {
   const [content, setContent] = useState(initialContent);
   const [renderMode, setRenderMode] = useState(false);
   const textareaRef = useRef(null);
+
 
   useEffect(() => {
     if (!renderMode && textareaRef.current) textareaRef.current.focus();
@@ -198,25 +198,22 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (!saving && title.trim()) onSave(title, content);
+        if (!saving) onSave(content);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [title, content, saving, onSave]);
+  }, [content, saving, onSave]);
+
 
   return (
     <div style={s.panel}>
       <div style={s.panelHeader}>
         <button onClick={onBack} style={{ ...s.btn, ...s.btnGhost }}>← Back</button>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {status && <span style={s.statusText}>{status}</span>}
           <button
             onClick={() => setRenderMode(m => !m)}
-            style={{
-              ...s.btn,
-              ...(renderMode ? s.btnToggleOn : s.btnToggleOff),
-            }}
+            style={{ ...s.btn, ...(renderMode ? s.btnToggleOn : s.btnToggleOff) }}
           >
             <span style={s.toggleDot(renderMode)} />
             Render Markdown
@@ -225,8 +222,8 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
           <button onClick={onBack} style={{ ...s.btn, ...s.btnGhost }}>Close Note</button>
           <span style={s.btnSeparator} />
           <button
-            onClick={() => onSave(title, content)}
-            disabled={saving || !title.trim()}
+            onClick={() => onSave(content)}
+            disabled={saving}
             style={{ ...s.btn, ...s.btnPrimary }}
           >
             {saving ? 'Saving…' : 'Save Note'}
@@ -234,17 +231,11 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
         </div>
       </div>
       <div style={s.editorBody}>
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Note title"
-          style={{ ...s.input, ...s.titleInput }}
-        />
         {conflictBanner && (
           <div style={s.conflictBanner}>
             <span>⚠️ Merge conflict detected. The file was updated remotely. The latest SHA has been loaded and your edits are preserved — review and save again.</span>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button onClick={() => onSave(title, content)} style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: '4px 10px' }}>
+              <button onClick={() => onSave(content)} style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: '4px 10px' }}>
                 Retry Save
               </button>
               <button onClick={onClearConflict} style={{ ...s.btn, ...s.btnGhost, fontSize: 12, padding: '4px 10px' }}>
@@ -259,7 +250,7 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
               const ReactMarkdown = require('react-markdown').default;
               return (
                 <div style={s.markdownPreview}>
-                  <ReactMarkdown>{`# ${title}\n\n${content}`}</ReactMarkdown>
+                  <ReactMarkdown>{content}</ReactMarkdown>
                 </div>
               );
             }}
@@ -550,13 +541,12 @@ export default function NotebookPage() {
       if (res.ok) {
         const data = await res.json();
         const raw = b64Decode(data.content);
-        const fmMatch = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+        // Strip frontmatter (backwards compat with old saved notes)
+        const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/);
         const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
-        const labelMatch = fmMatch?.[1]?.match(/sidebar_label:\s*["']?([^"'\n]+)["']?/);
-        const h1Match = body.match(/^#\s+(.+)/m);
-        const title = labelMatch ? labelMatch[1] : (h1Match ? h1Match[1] : note.name.replace(/\.mdx?$/, ''));
-        const content = body.replace(/^#\s+.+\n?/, '').trim();
-        setEditingNote({ path: `${DOCS_PATH}/${selectedNotebook.name}/${note.name}`, sha: data.sha, title, content });
+        // Strip leading '# ' from first line (backwards compat with old h1 title format)
+        const content = body.replace(/^# /, '').trimStart();
+        setEditingNote({ path: `${DOCS_PATH}/${selectedNotebook.name}/${note.name}`, sha: data.sha, content });
         setView('edit');
       }
     } catch (e) {
@@ -564,10 +554,11 @@ export default function NotebookPage() {
     }
   };
 
-  const saveNote = async (title, content) => {
+  const saveNote = async (content) => {
     setConflictBanner(false);
     setSaving(true);
 
+    const title = content.split('\n')[0].trim() || 'untitled';
     const fileName = editingNote ? editingNote.path.split('/').pop() : `${slugify(title)}.md`;
     const filePath = editingNote ? editingNote.path : `${DOCS_PATH}/${selectedNotebook.name}/${fileName}`;
 
@@ -581,10 +572,9 @@ export default function NotebookPage() {
 
     let res;
     try {
-      const fullMd = `---\nsidebar_label: "${title}"\n---\n\n# ${title}\n\n${content}`;
       const body = {
         message: editingNote ? `Update: ${title}` : `Create note: ${title}`,
-        content: b64Encode(fullMd),
+        content: b64Encode(content),
         branch: BRANCH,
       };
       if (editingNote?.sha) body.sha = editingNote.sha;
@@ -606,7 +596,7 @@ export default function NotebookPage() {
         const latest = await fetch(`${API}/${filePath}`, { headers: authHeaders() });
         if (latest.ok) {
           const data = await latest.json();
-          setEditingNote(prev => prev ? { ...prev, sha: data.sha } : { path: filePath, sha: data.sha, title, content });
+          setEditingNote(prev => prev ? { ...prev, sha: data.sha } : { path: filePath, sha: data.sha, content });
         }
       } catch {}
       setConflictBanner(true);
@@ -723,7 +713,6 @@ export default function NotebookPage() {
               key={editingNote?.path ?? 'new'}
               onBack={() => setView('list')}
               onSave={saveNote}
-              initialTitle={editingNote?.title ?? ''}
               initialContent={editingNote?.content ?? ''}
               saving={saving}
               status={status}
@@ -917,6 +906,17 @@ const s = {
     color: 'var(--ifm-color-emphasis-500)',
     flexShrink: 0,
   },
+  editorTitle: {
+    flex: 1,
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: 600,
+    color: 'var(--ifm-color-emphasis-700)',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
+    padding: '0 16px',
+  },
   btnSeparator: {
     width: 1,
     height: 20,
@@ -1069,6 +1069,13 @@ const s = {
     fontSize: 13,
     lineHeight: 1.5,
     flexShrink: 0,
+  },
+  previewTitle: {
+    fontSize: 24,
+    fontWeight: 700,
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottom: '1px solid var(--ifm-color-emphasis-200)',
   },
   markdownPreview: {
     flex: 1,
