@@ -1,4 +1,4 @@
-Header 1
+# Header 1
 
 # text under header 1
 ## header 2
