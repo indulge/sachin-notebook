@@ -117,7 +117,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading }) {
 
 // ── Note list ───────────────────────────────────────────────────────────────
 
-function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, syncing, syncProgress }) {
+function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, syncing, syncProgress, metadata }) {
   const [confirmingDelete, setConfirmingDelete] = useState(null);
 
   const handleDeleteClick = (e, note) => {
@@ -162,7 +162,7 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
               onClick={() => onOpenNote(note)}
               style={{ flex: 1, cursor: 'pointer' }}
             >
-              {note.name.replace(/\.mdx?$/, '')}
+              {metadata?.titles?.[note.name] || note.name.replace(/\.mdx?$/, '')}
             </span>
             {confirmingDelete === note.name ? (
               <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
@@ -184,11 +184,11 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
 
 // ── Note editor ─────────────────────────────────────────────────────────────
 
-function NoteEditor({ onBack, onSave, initialContent = '', saving, status, conflictBanner, onClearConflict }) {
+function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', saving, status, conflictBanner, onClearConflict }) {
+  const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [renderMode, setRenderMode] = useState(false);
   const textareaRef = useRef(null);
-
 
   useEffect(() => {
     if (!renderMode && textareaRef.current) textareaRef.current.focus();
@@ -198,13 +198,12 @@ function NoteEditor({ onBack, onSave, initialContent = '', saving, status, confl
     const handler = (e) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        if (!saving) onSave(content);
+        if (!saving) onSave(title, content);
       }
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [content, saving, onSave]);
-
+  }, [title, content, saving, onSave]);
 
   return (
     <div style={s.panel}>
@@ -222,7 +221,7 @@ function NoteEditor({ onBack, onSave, initialContent = '', saving, status, confl
           <button onClick={onBack} style={{ ...s.btn, ...s.btnGhost }}>Close Note</button>
           <span style={s.btnSeparator} />
           <button
-            onClick={() => onSave(content)}
+            onClick={() => onSave(title, content)}
             disabled={saving}
             style={{ ...s.btn, ...s.btnPrimary }}
           >
@@ -231,11 +230,17 @@ function NoteEditor({ onBack, onSave, initialContent = '', saving, status, confl
         </div>
       </div>
       <div style={s.editorBody}>
+        <input
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="Note title"
+          style={{ ...s.input, ...s.titleInput }}
+        />
         {conflictBanner && (
           <div style={s.conflictBanner}>
             <span>⚠️ Merge conflict detected. The file was updated remotely. The latest SHA has been loaded and your edits are preserved — review and save again.</span>
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button onClick={() => onSave(content)} style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: '4px 10px' }}>
+              <button onClick={() => onSave(title, content)} style={{ ...s.btn, ...s.btnPrimary, fontSize: 12, padding: '4px 10px' }}>
                 Retry Save
               </button>
               <button onClick={onClearConflict} style={{ ...s.btn, ...s.btnGhost, fontSize: 12, padding: '4px 10px' }}>
@@ -372,6 +377,7 @@ export default function NotebookPage() {
   const [syncProgress, setSyncProgress] = useState(0);
   const [saveModal, setSaveModal] = useState({ open: false, step: 'idle', progress: 0, error: null });
   const [conflictBanner, setConflictBanner] = useState(false);
+  const [notebookMetadata, setNotebookMetadata] = useState({ titles: {}, sha: null });
   const syncIntervalRef = useRef(null);
   const syncTimeoutRef = useRef(null);
 
@@ -419,6 +425,41 @@ export default function NotebookPage() {
       }
     } catch { /* network error */ }
     setLoadingNotes(false);
+  }, [authHeaders]);
+
+  const fetchMetadata = useCallback(async (notebook) => {
+    try {
+      const res = await fetch(
+        `${API}/${DOCS_PATH}/${notebook.name}/_metadata.json`,
+        { headers: authHeaders() }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        const titles = JSON.parse(b64Decode(data.content));
+        setNotebookMetadata({ titles, sha: data.sha });
+        return;
+      }
+    } catch {}
+    setNotebookMetadata({ titles: {}, sha: null });
+  }, [authHeaders]);
+
+  const pushMetadataUpdate = useCallback(async (notebook, newTitles, currentSha) => {
+    const body = {
+      message: 'chore: update note metadata',
+      content: b64Encode(JSON.stringify(newTitles, null, 2)),
+      branch: BRANCH,
+    };
+    if (currentSha) body.sha = currentSha;
+    try {
+      const res = await fetch(`${API}/${DOCS_PATH}/${notebook.name}/_metadata.json`, {
+        method: 'PUT', headers: authHeaders(), body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const resData = await res.json();
+        return resData.content.sha;
+      }
+    } catch {}
+    return currentSha;
   }, [authHeaders]);
 
   const startSyncPoll = useCallback((fileName, notebook, mode = 'appeared') => {
@@ -472,7 +513,9 @@ export default function NotebookPage() {
     setSelectedNotebook(nb);
     setView('list');
     setStatus('');
+    setNotebookMetadata({ titles: {}, sha: null });
     fetchNotes(nb);
+    fetchMetadata(nb);
   };
 
   const handleNewNotebook = () => { setView('new-notebook'); setStatus(''); };
@@ -518,6 +561,10 @@ export default function NotebookPage() {
         }),
       });
       if (res.ok) {
+        const newTitles = { ...notebookMetadata.titles };
+        delete newTitles[note.name];
+        const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, notebookMetadata.sha);
+        setNotebookMetadata({ titles: newTitles, sha: newMetaSha });
         startSyncPoll(note.name, selectedNotebook, 'gone');
       } else {
         const err = await res.json();
@@ -546,7 +593,8 @@ export default function NotebookPage() {
         const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
         // Strip leading '# ' from first line (backwards compat with old h1 title format)
         const content = body.replace(/^# /, '').trimStart();
-        setEditingNote({ path: `${DOCS_PATH}/${selectedNotebook.name}/${note.name}`, sha: data.sha, content });
+        const title = notebookMetadata.titles[note.name] || '';
+        setEditingNote({ path: `${DOCS_PATH}/${selectedNotebook.name}/${note.name}`, sha: data.sha, title, content });
         setView('edit');
       }
     } catch (e) {
@@ -554,12 +602,12 @@ export default function NotebookPage() {
     }
   };
 
-  const saveNote = async (content) => {
+  const saveNote = async (title, content) => {
     setConflictBanner(false);
     setSaving(true);
 
-    const title = content.split('\n')[0].trim() || 'untitled';
-    const fileName = editingNote ? editingNote.path.split('/').pop() : `${slugify(title)}.md`;
+    const noteTitle = title.trim() || 'untitled';
+    const fileName = editingNote ? editingNote.path.split('/').pop() : `${slugify(noteTitle)}.md`;
     const filePath = editingNote ? editingNote.path : `${DOCS_PATH}/${selectedNotebook.name}/${fileName}`;
 
     // ── Phase 1: push ──────────────────────────────────────────────────────
@@ -573,7 +621,7 @@ export default function NotebookPage() {
     let res;
     try {
       const body = {
-        message: editingNote ? `Update: ${title}` : `Create note: ${title}`,
+        message: editingNote ? `Update: ${noteTitle}` : `Create note: ${noteTitle}`,
         content: b64Encode(content),
         branch: BRANCH,
       };
@@ -596,7 +644,7 @@ export default function NotebookPage() {
         const latest = await fetch(`${API}/${filePath}`, { headers: authHeaders() });
         if (latest.ok) {
           const data = await latest.json();
-          setEditingNote(prev => prev ? { ...prev, sha: data.sha } : { path: filePath, sha: data.sha, content });
+          setEditingNote(prev => prev ? { ...prev, sha: data.sha } : { path: filePath, sha: data.sha, title, content });
         }
       } catch {}
       setConflictBanner(true);
@@ -613,13 +661,17 @@ export default function NotebookPage() {
       return;
     }
 
-    // Push succeeded — update SHA for next save
+    // Push succeeded — update note SHA and metadata
     try {
       const resData = await res.json();
       if (resData.content?.sha) {
         setEditingNote(prev => prev ? { ...prev, sha: resData.content.sha } : null);
       }
     } catch {}
+
+    const newTitles = { ...notebookMetadata.titles, [fileName]: noteTitle };
+    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, notebookMetadata.sha);
+    setNotebookMetadata({ titles: newTitles, sha: newMetaSha });
 
     // ── Phase 2: poll until repo reflects the change ───────────────────────
     setSaveModal({ open: true, step: 'syncing', progress: 50, error: null });
@@ -713,6 +765,7 @@ export default function NotebookPage() {
               key={editingNote?.path ?? 'new'}
               onBack={() => setView('list')}
               onSave={saveNote}
+              initialTitle={editingNote?.title ?? ''}
               initialContent={editingNote?.content ?? ''}
               saving={saving}
               status={status}
@@ -728,6 +781,7 @@ export default function NotebookPage() {
               onNewNote={openNewNote}
               onOpenNote={openNote}
               onDeleteNote={deleteNote}
+              metadata={notebookMetadata}
               syncing={syncing}
               syncProgress={syncProgress}
             />
