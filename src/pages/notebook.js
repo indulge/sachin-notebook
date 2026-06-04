@@ -83,10 +83,20 @@ function TokenGate({ onAuthenticated, onDismiss }) {
 
 // ── Notebook sidebar ────────────────────────────────────────────────────────
 
-function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading }) {
+function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading, onRefresh, refreshing }) {
   return (
     <aside style={s.sidebar}>
-      <div style={s.sidebarHeader}>My Notebooks</div>
+      <div style={s.sidebarHeader}>
+        <span>My Notebooks</span>
+        <button
+          onClick={onRefresh}
+          disabled={loading || refreshing}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '0 2px', opacity: (loading || refreshing) ? 0.4 : 0.7, lineHeight: 1 }}
+          title="Refresh everything"
+        >
+          {refreshing ? '⟳' : '↻'}
+        </button>
+      </div>
       <div style={s.notebookList}>
         {loading && <div style={s.hint}>Loading…</div>}
         {!loading && notebooks.length === 0 && (
@@ -117,7 +127,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading }) {
 
 // ── Note list ───────────────────────────────────────────────────────────────
 
-function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, syncing, syncProgress, metadata }) {
+function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNote, onRefresh, syncing, syncProgress, metadata, loadingNote }) {
   const [confirmingDelete, setConfirmingDelete] = useState(null);
 
   const handleDeleteClick = (e, note) => {
@@ -140,7 +150,10 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
     <div style={s.panel}>
       <div style={s.panelHeader}>
         <span style={{ fontWeight: 600, fontSize: 16 }}>{notebook.name}</span>
-        <button onClick={onNewNote} style={{ ...s.btn, ...s.btnPrimary }}>+ New Note</button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button onClick={onRefresh} disabled={loading} style={{ ...s.btn, ...s.btnGhost }} title="Refresh">↻</button>
+          <button onClick={onNewNote} style={{ ...s.btn, ...s.btnPrimary }}>+ New Note</button>
+        </div>
       </div>
       <div style={s.syncBarTrack}>
         <div style={{
@@ -155,28 +168,34 @@ function NoteList({ notebook, notes, loading, onNewNote, onOpenNote, onDeleteNot
         {!loading && notes.length === 0 && (
           <div style={s.hint}>No notes yet. Create your first one.</div>
         )}
-        {notes.map(note => (
-          <div key={note.name} style={s.noteItem} className="note-item-row">
-            <span style={s.noteIcon}>📄</span>
-            <span
-              onClick={() => onOpenNote(note)}
-              style={{ flex: 1, cursor: 'pointer' }}
-            >
-              {metadata?.titles?.[note.name] || note.name.replace(/\.mdx?$/, '')}
-            </span>
-            {confirmingDelete === note.name ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
-                <span style={{ color: 'var(--ifm-color-emphasis-600)' }}>Delete?</span>
-                <button onClick={e => handleConfirmDelete(e, note)} style={{ ...s.btn, ...s.btnDanger, padding: '3px 8px' }}>Yes</button>
-                <button onClick={handleCancelDelete} style={{ ...s.btn, ...s.btnGhost, padding: '3px 8px' }}>No</button>
+        {notes.map(note => {
+          const isLoading = loadingNote === note.name;
+          const isBlocked = !!loadingNote && !isLoading;
+          return (
+            <div key={note.name} style={{ ...s.noteItem, opacity: isBlocked ? 0.5 : 1 }} className="note-item-row">
+              <span style={s.noteIcon}>{isLoading ? '⟳' : '📄'}</span>
+              <span
+                onClick={() => !loadingNote && onOpenNote(note)}
+                style={{ flex: 1, cursor: loadingNote ? 'default' : 'pointer', color: isLoading ? 'var(--ifm-color-emphasis-500)' : undefined }}
+              >
+                {metadata?.titles?.[note.name] || note.name.replace(/\.mdx?$/, '')}
               </span>
-            ) : (
-              <button onClick={e => handleDeleteClick(e, note)} style={s.deleteBtn} className="note-delete-btn" title="Delete note">
-                🗑
-              </button>
-            )}
-          </div>
-        ))}
+              {isLoading ? (
+                <span style={{ fontSize: 11, color: 'var(--ifm-color-emphasis-500)' }}>Loading…</span>
+              ) : confirmingDelete === note.name ? (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                  <span style={{ color: 'var(--ifm-color-emphasis-600)' }}>Delete?</span>
+                  <button onClick={e => handleConfirmDelete(e, note)} style={{ ...s.btn, ...s.btnDanger, padding: '3px 8px' }}>Yes</button>
+                  <button onClick={handleCancelDelete} style={{ ...s.btn, ...s.btnGhost, padding: '3px 8px' }}>No</button>
+                </span>
+              ) : (
+                <button onClick={e => !loadingNote && handleDeleteClick(e, note)} style={s.deleteBtn} className="note-delete-btn" title="Delete note">
+                  🗑
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -188,6 +207,7 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [renderMode, setRenderMode] = useState(false);
+  const [discardConfirm, setDiscardConfirm] = useState(false);
   const textareaRef = useRef(null);
 
   useEffect(() => {
@@ -218,15 +238,25 @@ function NoteEditor({ onBack, onSave, initialTitle = '', initialContent = '', sa
             Render Markdown
           </button>
           <span style={s.btnSeparator} />
-          <button onClick={onBack} style={{ ...s.btn, ...s.btnGhost }}>Close Note</button>
-          <span style={s.btnSeparator} />
-          <button
-            onClick={() => onSave(title, content)}
-            disabled={saving}
-            style={{ ...s.btn, ...s.btnPrimary }}
-          >
-            {saving ? 'Saving…' : 'Save Note'}
-          </button>
+          {discardConfirm ? (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: 12, color: 'var(--ifm-color-emphasis-600)' }}>Discard unsaved changes?</span>
+              <button onClick={onBack} style={{ ...s.btn, ...s.btnDanger, padding: '3px 10px', fontSize: 12 }}>Discard</button>
+              <button onClick={() => setDiscardConfirm(false)} style={{ ...s.btn, ...s.btnGhost, padding: '3px 10px', fontSize: 12 }}>Cancel</button>
+            </span>
+          ) : (
+            <>
+              <button onClick={() => setDiscardConfirm(true)} style={{ ...s.btn, ...s.btnGhost }}>Discard changes</button>
+              <span style={s.btnSeparator} />
+              <button
+                onClick={() => onSave(title, content)}
+                disabled={saving}
+                style={{ ...s.btn, ...s.btnPrimary }}
+              >
+                {saving ? 'Saving…' : 'Save Note'}
+              </button>
+            </>
+          )}
         </div>
       </div>
       <div style={s.editorBody}>
@@ -310,6 +340,38 @@ function NewNotebookPanel({ onCreate, onCancel, saving, status }) {
   );
 }
 
+// ── Notebook create modal ───────────────────────────────────────────────────
+
+function NotebookModal({ step, error, onClose }) {
+  const info = {
+    creating: { label: 'Creating notebook…',         color: 'var(--ifm-color-primary)' },
+    syncing:  { label: 'Verifying in repository…',   color: 'var(--ifm-color-primary)' },
+    done:     { label: '✓ Notebook created',          color: '#38a169' },
+    error:    { label: '✕ Failed to create',          color: '#e53e3e' },
+  };
+  const { label, color } = info[step] ?? info.creating;
+  return (
+    <div style={s.modalOverlay}>
+      <div style={s.modalCard}>
+        <div style={{ fontWeight: 600, fontSize: 15, marginBottom: step === 'done' ? 0 : 14, color }}>
+          {label}
+        </div>
+        {(step === 'creating' || step === 'syncing') && (
+          <div style={s.modalProgressTrack}>
+            <div style={{ height: '100%', borderRadius: 3, width: step === 'syncing' ? '80%' : '40%', backgroundColor: color, opacity: 0.7, transition: 'width 0.4s ease' }} />
+          </div>
+        )}
+        {step === 'error' && (
+          <>
+            {error && <p style={{ fontSize: 13, color: '#e53e3e', margin: '10px 0 0' }}>{error}</p>}
+            <button onClick={onClose} style={{ ...s.btn, ...s.btnGhost, marginTop: 14 }}>Close</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Save modal ──────────────────────────────────────────────────────────────
 
 function SaveModal({ step, progress, error, onClose }) {
@@ -378,6 +440,10 @@ export default function NotebookPage() {
   const [saveModal, setSaveModal] = useState({ open: false, step: 'idle', progress: 0, error: null });
   const [conflictBanner, setConflictBanner] = useState(false);
   const [notebookMetadata, setNotebookMetadata] = useState({ titles: {}, sha: null });
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshProgress, setRefreshProgress] = useState(0);
+  const [loadingNote, setLoadingNote] = useState(null);
+  const [notebookModal, setNotebookModal] = useState({ open: false, step: 'idle', error: null });
   const syncIntervalRef = useRef(null);
   const syncTimeoutRef = useRef(null);
 
@@ -402,7 +468,7 @@ export default function NotebookPage() {
   const fetchNotebooks = useCallback(async () => {
     setLoadingNotebooks(true);
     try {
-      const res = await fetch(`${API}/${DOCS_PATH}`, { headers: authHeaders() });
+      const res = await fetch(`${API}/${DOCS_PATH}?ref=${BRANCH}&_=${Date.now()}`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setNotebooks(data.filter(i => i.type === 'dir'));
@@ -418,7 +484,7 @@ export default function NotebookPage() {
   const fetchNotes = useCallback(async (notebook) => {
     setLoadingNotes(true);
     try {
-      const res = await fetch(`${API}/${DOCS_PATH}/${notebook.name}`, { headers: authHeaders() });
+      const res = await fetch(`${API}/${DOCS_PATH}/${notebook.name}?ref=${BRANCH}&_=${Date.now()}`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json();
         setNotes(data.filter(i => i.type === 'file' && /\.mdx?$/.test(i.name) && !i.name.startsWith('_')));
@@ -430,7 +496,7 @@ export default function NotebookPage() {
   const fetchMetadata = useCallback(async (notebook) => {
     try {
       const res = await fetch(
-        `${API}/${DOCS_PATH}/${notebook.name}/_metadata.json`,
+        `${API}/${DOCS_PATH}/${notebook.name}/_metadata.json?ref=${BRANCH}&_=${Date.now()}`,
         { headers: authHeaders() }
       );
       if (res.ok) {
@@ -523,10 +589,12 @@ export default function NotebookPage() {
   const createNotebook = async (name) => {
     const slug = slugify(name);
     const catJson = JSON.stringify({ label: name, position: notebooks.length + 2 }, null, 2);
-    setSaving(true);
-    setStatus('');
+    setNotebookModal({ open: true, step: 'creating', error: null });
+
+    // Step 1: write _category_.json
+    let res;
     try {
-      const res = await fetch(`${API}/${DOCS_PATH}/${slug}/_category_.json`, {
+      res = await fetch(`${API}/${DOCS_PATH}/${slug}/_category_.json`, {
         method: 'PUT',
         headers: authHeaders(),
         body: JSON.stringify({
@@ -535,18 +603,48 @@ export default function NotebookPage() {
           branch: BRANCH,
         }),
       });
-      if (res.ok) {
-        await fetchNotebooks();
-        setView('list');
-        setSelectedNotebook(null);
-      } else {
-        const err = await res.json();
-        setStatus(`Error: ${err.message}`);
-      }
     } catch (e) {
-      setStatus(`Error: ${e.message}`);
+      setNotebookModal({ open: true, step: 'error', error: e.message });
+      return;
     }
-    setSaving(false);
+    if (!res.ok) {
+      let msg = 'Unknown error';
+      try { msg = (await res.json()).message; } catch {}
+      setNotebookModal({ open: true, step: 'error', error: msg });
+      return;
+    }
+
+    // Step 2: poll until the folder appears in the notebooks listing
+    setNotebookModal({ open: true, step: 'syncing', error: null });
+    let attempts = 0;
+    const poll = async () => {
+      attempts++;
+      try {
+        const r = await fetch(`${API}/${DOCS_PATH}?ref=${BRANCH}&_=${Date.now()}`, { headers: authHeaders() });
+        if (r.ok) {
+          const allNotebooks = (await r.json()).filter(i => i.type === 'dir');
+          const newNb = allNotebooks.find(nb => nb.name === slug);
+          if (newNb) {
+            setNotebooks(allNotebooks);
+            setSelectedNotebook(newNb);
+            setView('list');
+            setNotebookMetadata({ titles: {}, sha: null });
+            fetchNotes(newNb);
+            fetchMetadata(newNb);
+            setNotebookModal({ open: true, step: 'done', error: null });
+            setTimeout(() => setNotebookModal({ open: false, step: 'idle', error: null }), 1200);
+            return;
+          }
+        }
+      } catch {}
+      if (attempts < 12) {
+        setTimeout(poll, 2000);
+      } else {
+        // Timed out — dismiss and let the user refresh manually
+        setNotebookModal({ open: false, step: 'idle', error: null });
+      }
+    };
+    setTimeout(poll, 1500);
   };
 
   const deleteNote = async (note) => {
@@ -575,6 +673,68 @@ export default function NotebookPage() {
     }
   };
 
+  const refreshNotebook = () => {
+    if (!selectedNotebook) return;
+    fetchNotes(selectedNotebook);
+    fetchMetadata(selectedNotebook);
+  };
+
+  const refreshAll = async () => {
+    setRefreshing(true);
+    setRefreshProgress(0);
+    let prog = 0;
+    const tick = setInterval(() => {
+      prog = Math.min(prog + 3, 85);
+      setRefreshProgress(prog);
+    }, 80);
+
+    // 1. Refresh notebooks list
+    fetchNotebooks();
+
+    // 2. Refresh notes + metadata for the selected notebook
+    let freshTitles = {};
+    if (selectedNotebook) {
+      fetchNotes(selectedNotebook);
+      try {
+        const res = await fetch(
+          `${API}/${DOCS_PATH}/${selectedNotebook.name}/_metadata.json`,
+          { headers: authHeaders() }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          freshTitles = JSON.parse(b64Decode(data.content));
+          setNotebookMetadata({ titles: freshTitles, sha: data.sha });
+        } else {
+          setNotebookMetadata({ titles: {}, sha: null });
+        }
+      } catch {}
+    }
+
+    // 3. Re-fetch the open note so its content and SHA are current
+    if (view === 'edit' && editingNote) {
+      try {
+        const res = await fetch(`${API}/${editingNote.path}`, { headers: authHeaders() });
+        if (res.ok) {
+          const data = await res.json();
+          const raw = b64Decode(data.content);
+          const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/);
+          const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
+          const content = body;
+          const fileName = editingNote.path.split('/').pop();
+          const title = freshTitles[fileName] || editingNote.title;
+          setEditingNote(prev => prev
+            ? { ...prev, sha: data.sha, content, title, _refreshKey: (prev._refreshKey || 0) + 1 }
+            : null
+          );
+        }
+      } catch {}
+    }
+
+    clearInterval(tick);
+    setRefreshProgress(100);
+    setTimeout(() => { setRefreshing(false); setRefreshProgress(0); }, 500);
+  };
+
   const openNewNote = () => {
     setEditingNote(null);
     setView('edit');
@@ -582,6 +742,8 @@ export default function NotebookPage() {
   };
 
   const openNote = async (note) => {
+    if (loadingNote) return;
+    setLoadingNote(note.name);
     setStatus('');
     try {
       const res = await fetch(note.url, { headers: authHeaders() });
@@ -591,15 +753,17 @@ export default function NotebookPage() {
         // Strip frontmatter (backwards compat with old saved notes)
         const fmMatch = raw.match(/^---\n[\s\S]*?\n---\n?/);
         const body = fmMatch ? raw.slice(fmMatch[0].length) : raw;
-        // Strip leading '# ' from first line (backwards compat with old h1 title format)
-        const content = body.replace(/^# /, '').trimStart();
+        const content = body;
         const title = notebookMetadata.titles[note.name] || '';
         setEditingNote({ path: `${DOCS_PATH}/${selectedNotebook.name}/${note.name}`, sha: data.sha, title, content });
         setView('edit');
+      } else {
+        setStatus('Failed to load note.');
       }
     } catch (e) {
       setStatus(`Error loading note: ${e.message}`);
     }
+    setLoadingNote(null);
   };
 
   const saveNote = async (title, content) => {
@@ -661,11 +825,13 @@ export default function NotebookPage() {
       return;
     }
 
-    // Push succeeded — update note SHA and metadata
+    // Push succeeded — capture expected SHA, update state and metadata
+    let expectedSha = null;
     try {
       const resData = await res.json();
       if (resData.content?.sha) {
-        setEditingNote(prev => prev ? { ...prev, sha: resData.content.sha } : null);
+        expectedSha = resData.content.sha;
+        setEditingNote(prev => prev ? { ...prev, sha: expectedSha } : null);
       }
     } catch {}
 
@@ -673,7 +839,7 @@ export default function NotebookPage() {
     const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, notebookMetadata.sha);
     setNotebookMetadata({ titles: newTitles, sha: newMetaSha });
 
-    // ── Phase 2: poll until repo reflects the change ───────────────────────
+    // ── Phase 2: poll file directly until SHA matches expected ─────────────
     setSaveModal({ open: true, step: 'syncing', progress: 50, error: null });
     let syncProg = 50;
     const syncTick = setInterval(() => {
@@ -681,37 +847,47 @@ export default function NotebookPage() {
       setSaveModal(prev => ({ ...prev, progress: syncProg }));
     }, 150);
 
+    const finish = async () => {
+      clearInterval(syncTick);
+      // Refresh the notes list once confirmed
+      try {
+        const listR = await fetch(
+          `${API}/${DOCS_PATH}/${selectedNotebook.name}?ref=${BRANCH}&_=${Date.now()}`,
+          { headers: authHeaders() }
+        );
+        if (listR.ok) {
+          const files = (await listR.json()).filter(
+            i => i.type === 'file' && /\.mdx?$/.test(i.name) && !i.name.startsWith('_')
+          );
+          setNotes(files);
+        }
+      } catch {}
+      setSaveModal({ open: true, step: 'done', progress: 100, error: null });
+      setTimeout(() => setSaveModal({ open: false, step: 'idle', progress: 0, error: null }), 1000);
+      setSaving(false);
+    };
+
     let attempts = 0;
     const poll = async () => {
       attempts++;
       try {
         const r = await fetch(
-          `${API}/${DOCS_PATH}/${selectedNotebook.name}?ref=${BRANCH}&_=${Date.now()}`,
+          `${API}/${filePath}?ref=${BRANCH}&_=${Date.now()}`,
           { headers: authHeaders() }
         );
         if (r.ok) {
-          const files = (await r.json()).filter(
-            i => i.type === 'file' && /\.mdx?$/.test(i.name) && !i.name.startsWith('_')
-          );
-          if (files.some(f => f.name === fileName)) {
-            clearInterval(syncTick);
-            setNotes(files);
-            setSaveModal({ open: true, step: 'done', progress: 100, error: null });
-            setTimeout(() => setSaveModal({ open: false, step: 'idle', progress: 0, error: null }), 1000);
-            setSaving(false);
+          const fileData = await r.json();
+          // Confirmed when SHA matches (or no expected SHA to check against)
+          if (!expectedSha || fileData.sha === expectedSha) {
+            await finish();
             return;
           }
         }
       } catch {}
-      if (attempts < 10) { setTimeout(poll, 1500); }
-      else {
-        clearInterval(syncTick);
-        setSaveModal({ open: true, step: 'done', progress: 100, error: null });
-        setTimeout(() => setSaveModal({ open: false, step: 'idle', progress: 0, error: null }), 1000);
-        setSaving(false);
-      }
+      if (attempts < 12) { setTimeout(poll, 2000); }
+      else { await finish(); }
     };
-    setTimeout(poll, 1000);
+    setTimeout(poll, 1500);
   };
 
   const [showTokenDialog, setShowTokenDialog] = useState(false);
@@ -744,12 +920,24 @@ export default function NotebookPage() {
   return (
     <Layout title="Notebook" description="Write notes">
       <div style={s.workspace}>
+        {(refreshing || refreshProgress > 0) && (
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 100, backgroundColor: 'var(--ifm-color-emphasis-200)' }}>
+            <div style={{
+              height: '100%',
+              width: `${refreshProgress}%`,
+              backgroundColor: 'var(--ifm-color-primary)',
+              transition: refreshProgress < 100 ? 'width 0.12s ease' : 'width 0.3s ease',
+            }} />
+          </div>
+        )}
         <Sidebar
           notebooks={notebooks}
           selected={selectedNotebook}
           onSelect={selectNotebook}
           onNewNotebook={handleNewNotebook}
           loading={loadingNotebooks}
+          onRefresh={refreshAll}
+          refreshing={refreshing}
         />
         <main style={s.main}>
           {view === 'new-notebook' && (
@@ -762,7 +950,7 @@ export default function NotebookPage() {
           )}
           {view === 'edit' && (
             <NoteEditor
-              key={editingNote?.path ?? 'new'}
+              key={editingNote ? `${editingNote.path}-${editingNote._refreshKey ?? 0}` : 'new'}
               onBack={() => setView('list')}
               onSave={saveNote}
               initialTitle={editingNote?.title ?? ''}
@@ -781,7 +969,9 @@ export default function NotebookPage() {
               onNewNote={openNewNote}
               onOpenNote={openNote}
               onDeleteNote={deleteNote}
+              onRefresh={refreshNotebook}
               metadata={notebookMetadata}
+              loadingNote={loadingNote}
               syncing={syncing}
               syncProgress={syncProgress}
             />
@@ -794,6 +984,13 @@ export default function NotebookPage() {
             progress={saveModal.progress}
             error={saveModal.error}
             onClose={() => setSaveModal({ open: false, step: 'idle', progress: 0, error: null })}
+          />
+        )}
+        {notebookModal.open && (
+          <NotebookModal
+            step={notebookModal.step}
+            error={notebookModal.error}
+            onClose={() => setNotebookModal({ open: false, step: 'idle', error: null })}
           />
         )}
         <button onClick={() => setShowTokenDialog(true)} style={s.forgetBtn} title="Change GitHub token">
@@ -862,6 +1059,9 @@ const s = {
     letterSpacing: '0.08em',
     textTransform: 'uppercase',
     color: 'var(--ifm-color-emphasis-600)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   notebookList: {
     flex: 1,
