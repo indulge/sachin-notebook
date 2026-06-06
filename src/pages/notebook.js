@@ -21,20 +21,46 @@ function b64Decode(str) {
 }
 
 // ── Metadata helpers ─────────────────────────────────────────────────────────
-// The _metadata.json file holds note titles and the user-defined display order.
-// New format: { titles: { "file.md": "Title" }, order: ["file.md", ...] }
+// The _metadata.json file holds note titles, the user-defined display order, and
+// the last-updated timestamp (epoch millis) for each note.
+// New format: { titles: { "file.md": "Title" }, order: [...], updated: { "file.md": 1700000000000 } }
 // Legacy format: a flat { "file.md": "Title" } map (order derived from key order).
 
 function parseMetadata(obj) {
   if (obj && typeof obj === 'object' && obj.titles && typeof obj.titles === 'object') {
-    return { titles: obj.titles, order: Array.isArray(obj.order) ? obj.order : Object.keys(obj.titles) };
+    return {
+      titles: obj.titles,
+      order: Array.isArray(obj.order) ? obj.order : Object.keys(obj.titles),
+      updated: obj.updated && typeof obj.updated === 'object' ? obj.updated : {},
+    };
   }
   const titles = obj || {};
-  return { titles, order: Object.keys(titles) };
+  return { titles, order: Object.keys(titles), updated: {} };
 }
 
-function serializeMetadata(titles, order) {
-  return JSON.stringify({ titles, order }, null, 2);
+function serializeMetadata(titles, order, updated) {
+  return JSON.stringify({ titles, order, updated: updated || {} }, null, 2);
+}
+
+// Last-updated epoch millis for a note: prefer the stored timestamp, then fall
+// back to the epoch suffix in the filename ("<slug>-<epochMillis>.md").
+function noteUpdatedAt(name, updated) {
+  if (updated && updated[name]) return updated[name];
+  const m = /-(\d{13})\.mdx?$/.exec(name);
+  return m ? Number(m[1]) : null;
+}
+
+// Human-readable date + time, e.g. "Jun 7, 2026, 3:42 PM".
+function formatTimestamp(ms) {
+  if (!ms) return '';
+  try {
+    return new Date(ms).toLocaleString(undefined, {
+      year: 'numeric', month: 'short', day: 'numeric',
+      hour: 'numeric', minute: '2-digit',
+    });
+  } catch {
+    return '';
+  }
 }
 
 // Sort the GitHub file listing by the saved order; anything not in `order`
@@ -173,7 +199,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading, onRefr
 // ── Expandable note tile (Jupyter-style inline expand/collapse) ───────────────
 
 function ExpandableNote({
-  note, title, expanded, onToggle, onLoad, onSave, deleteSlot,
+  note, title, updatedAt, expanded, onToggle, onLoad, onSave, deleteSlot,
   index, onDragStart, onHover, onDropAt, onDragEnd, dragging, dragActive,
 }) {
   const [loading, setLoading] = useState(false);
@@ -268,6 +294,11 @@ function ExpandableNote({
         <span style={{ flex: 1, fontWeight: expanded ? 600 : 400 }}>
           {title || note.name.replace(/\.mdx?$/, '')}
         </span>
+        {updatedAt && (
+          <span style={s.tileUpdated} title={`Last updated ${formatTimestamp(updatedAt)}`}>
+            {formatTimestamp(updatedAt)}
+          </span>
+        )}
         {isDirty && <span style={s.unsavedBadge}><span style={s.unsavedDot} />unsaved</span>}
         {deleteSlot}
       </div>
@@ -446,6 +477,7 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
               <ExpandableNote
                 note={note}
                 title={title}
+                updatedAt={noteUpdatedAt(note.name, metadata?.updated)}
                 expanded={expanded.has(note.name)}
                 onToggle={toggle}
                 onLoad={onLoadNote}
@@ -737,7 +769,7 @@ export default function NotebookPage() {
   const [syncProgress, setSyncProgress] = useState(0);
   const [saveModal, setSaveModal] = useState({ open: false, step: 'idle', progress: 0, error: null });
   const [conflictBanner, setConflictBanner] = useState(false);
-  const [notebookMetadata, setNotebookMetadata] = useState({ titles: {}, order: [], sha: null });
+  const [notebookMetadata, setNotebookMetadata] = useState({ titles: {}, order: [], updated: {}, sha: null });
   const [refreshing, setRefreshing] = useState(false);
   const [refreshProgress, setRefreshProgress] = useState(0);
   const [loadingNote, setLoadingNote] = useState(null);
@@ -799,18 +831,18 @@ export default function NotebookPage() {
       );
       if (res.ok) {
         const data = await res.json();
-        const { titles, order } = parseMetadata(JSON.parse(b64Decode(data.content)));
-        setNotebookMetadata({ titles, order, sha: data.sha });
+        const { titles, order, updated } = parseMetadata(JSON.parse(b64Decode(data.content)));
+        setNotebookMetadata({ titles, order, updated, sha: data.sha });
         return;
       }
     } catch {}
-    setNotebookMetadata({ titles: {}, order: [], sha: null });
+    setNotebookMetadata({ titles: {}, order: [], updated: {}, sha: null });
   }, [authHeaders]);
 
-  const pushMetadataUpdate = useCallback(async (notebook, newTitles, newOrder, currentSha) => {
+  const pushMetadataUpdate = useCallback(async (notebook, newTitles, newOrder, newUpdated, currentSha) => {
     const body = {
       message: 'chore: update note metadata',
-      content: b64Encode(serializeMetadata(newTitles, newOrder)),
+      content: b64Encode(serializeMetadata(newTitles, newOrder, newUpdated)),
       branch: BRANCH,
     };
     if (currentSha) body.sha = currentSha;
@@ -877,7 +909,7 @@ export default function NotebookPage() {
     setSelectedNotebook(nb);
     setView('list');
     setStatus('');
-    setNotebookMetadata({ titles: {}, order: [], sha: null });
+    setNotebookMetadata({ titles: {}, order: [], updated: {}, sha: null });
     fetchNotes(nb);
     fetchMetadata(nb);
   };
@@ -926,7 +958,7 @@ export default function NotebookPage() {
             setNotebooks(allNotebooks);
             setSelectedNotebook(newNb);
             setView('list');
-            setNotebookMetadata({ titles: {}, order: [], sha: null });
+            setNotebookMetadata({ titles: {}, order: [], updated: {}, sha: null });
             fetchNotes(newNb);
             fetchMetadata(newNb);
             setNotebookModal({ open: true, step: 'done', error: null });
@@ -960,8 +992,10 @@ export default function NotebookPage() {
         const newTitles = { ...notebookMetadata.titles };
         delete newTitles[note.name];
         const newOrder = notebookMetadata.order.filter(n => n !== note.name);
-        const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, notebookMetadata.sha);
-        setNotebookMetadata({ titles: newTitles, order: newOrder, sha: newMetaSha });
+        const newUpdated = { ...notebookMetadata.updated };
+        delete newUpdated[note.name];
+        const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, newUpdated, notebookMetadata.sha);
+        setNotebookMetadata({ titles: newTitles, order: newOrder, updated: newUpdated, sha: newMetaSha });
         startSyncPoll(note.name, selectedNotebook, 'gone');
       } else {
         const err = await res.json();
@@ -997,9 +1031,9 @@ export default function NotebookPage() {
           const data = await res.json();
           const parsed = parseMetadata(JSON.parse(b64Decode(data.content)));
           freshTitles = parsed.titles;
-          setNotebookMetadata({ titles: parsed.titles, order: parsed.order, sha: data.sha });
+          setNotebookMetadata({ titles: parsed.titles, order: parsed.order, updated: parsed.updated, sha: data.sha });
         } else {
-          setNotebookMetadata({ titles: {}, order: [], sha: null });
+          setNotebookMetadata({ titles: {}, order: [], updated: {}, sha: null });
         }
       } catch {}
     }
@@ -1100,8 +1134,9 @@ export default function NotebookPage() {
     const newOrder = notebookMetadata.order.includes(note.name)
       ? notebookMetadata.order
       : [...notebookMetadata.order, note.name];
-    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, notebookMetadata.sha);
-    setNotebookMetadata({ titles: newTitles, order: newOrder, sha: newMetaSha });
+    const newUpdated = { ...notebookMetadata.updated, [note.name]: Date.now() };
+    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, newUpdated, notebookMetadata.sha);
+    setNotebookMetadata({ titles: newTitles, order: newOrder, updated: newUpdated, sha: newMetaSha });
     return newSha;
   }, [authHeaders, selectedNotebook, notebookMetadata, pushMetadataUpdate]);
 
@@ -1109,7 +1144,7 @@ export default function NotebookPage() {
   const reorderNotes = useCallback(async (newOrder) => {
     setNotebookMetadata(prev => ({ ...prev, order: newOrder }));
     const newMetaSha = await pushMetadataUpdate(
-      selectedNotebook, notebookMetadata.titles, newOrder, notebookMetadata.sha
+      selectedNotebook, notebookMetadata.titles, newOrder, notebookMetadata.updated, notebookMetadata.sha
     );
     setNotebookMetadata(prev => ({ ...prev, order: newOrder, sha: newMetaSha }));
   }, [selectedNotebook, notebookMetadata, pushMetadataUpdate]);
@@ -1119,7 +1154,7 @@ export default function NotebookPage() {
     setSaving(true);
 
     const noteTitle = title.trim() || 'untitled';
-    const fileName = editingNote ? editingNote.path.split('/').pop() : `${slugify(noteTitle)}.md`;
+    const fileName = editingNote ? editingNote.path.split('/').pop() : `${slugify(noteTitle)}-${Date.now()}.md`;
     const filePath = editingNote ? editingNote.path : `${DOCS_PATH}/${selectedNotebook.name}/${fileName}`;
 
     // ── Phase 1: push ──────────────────────────────────────────────────────
@@ -1192,8 +1227,9 @@ export default function NotebookPage() {
     const newOrder = notebookMetadata.order.includes(fileName)
       ? notebookMetadata.order
       : [...notebookMetadata.order, fileName];
-    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, notebookMetadata.sha);
-    setNotebookMetadata({ titles: newTitles, order: newOrder, sha: newMetaSha });
+    const newUpdated = { ...notebookMetadata.updated, [fileName]: Date.now() };
+    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, newUpdated, notebookMetadata.sha);
+    setNotebookMetadata({ titles: newTitles, order: newOrder, updated: newUpdated, sha: newMetaSha });
 
     // ── Phase 2: poll file directly until SHA matches expected ─────────────
     setSaveModal({ open: true, step: 'syncing', progress: 50, error: null });
@@ -1528,6 +1564,16 @@ const s = {
   dropSeparatorLineActive: {
     backgroundColor: 'var(--ifm-color-primary)',
     boxShadow: '0 0 0 1px var(--ifm-color-primary)',
+  },
+  tileUpdated: {
+    flexShrink: 0,
+    marginLeft: 'auto',
+    paddingLeft: 12,
+    fontSize: 11,
+    fontWeight: 400,
+    color: 'var(--ifm-color-emphasis-500)',
+    whiteSpace: 'nowrap',
+    fontVariantNumeric: 'tabular-nums',
   },
   dragHandle: {
     cursor: 'grab',
