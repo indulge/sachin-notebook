@@ -1,1 +1,1 @@
-test another notebook note.
+notes body for a note in another nootebook.
