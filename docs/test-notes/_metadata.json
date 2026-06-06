@@ -1,7 +1,6 @@
 {
   "titles": {
     "title-1.md": "This is a test title for this note.",
-    "more-blah.md": "more blah - title",
     "note-3.md": "note 3",
     "note4.md": "note4",
     "note-5.md": "Note 5",
@@ -20,7 +19,6 @@
     "note-5.md",
     "z.md",
     "not6.md",
-    "more-blah.md",
     "asdfasdf.md",
     "sdfasdfasd.md",
     "title-1.md",
