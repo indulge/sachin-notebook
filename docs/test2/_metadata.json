@@ -1,8 +1,10 @@
 {
   "titles": {
-    "title.md": "title"
+    "title.md": "title",
+    "title1.md": "title1"
   },
   "order": [
-    "title.md"
+    "title.md",
+    "title1.md"
   ]
 }
