@@ -18,7 +18,8 @@
     "3.md": "3",
     "4.md": "4",
     "5.md": "6",
-    "this-is-a-new-note.md": "this is a new note."
+    "this-is-a-new-note.md": "this is a new note.",
+    "new-note-1780779784627.md": "new note"
   },
   "order": [
     "note4.md",
@@ -39,6 +40,10 @@
     "3.md",
     "4.md",
     "5.md",
-    "this-is-a-new-note.md"
-  ]
+    "this-is-a-new-note.md",
+    "new-note-1780779784627.md"
+  ],
+  "updated": {
+    "new-note-1780779784627.md": 1780779785784
+  }
 }
