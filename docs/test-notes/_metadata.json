@@ -1,16 +1,34 @@
 {
-  "title-1.md": "This is a test title for this note.",
-  "more-blah.md": "more blah - title",
-  "note-3.md": "note 3",
-  "note4.md": "note4",
-  "note-5.md": "Note 5",
-  "not6.md": "not6",
-  "7.md": "6",
-  "8.md": "7",
-  "z.md": "z",
-  "asdfasdf.md": "asdfasdf",
-  "sdfasdfasd.md": "sdfasdfasd",
-  "asdfasdfasdfasd.md": "asdfasdfasdfasd",
-  "dasd-asdf-asda-sd-asdasd-asd-asd-f.md": "dasd asdf asda sd asdasd asd asd f",
-  "wer3412341234.md": "wer3412341234"
+  "titles": {
+    "title-1.md": "This is a test title for this note.",
+    "more-blah.md": "more blah - title",
+    "note-3.md": "note 3",
+    "note4.md": "note4",
+    "note-5.md": "Note 5",
+    "not6.md": "not6",
+    "7.md": "6",
+    "8.md": "7",
+    "z.md": "z",
+    "asdfasdf.md": "asdfasdf",
+    "sdfasdfasd.md": "sdfasdfasd",
+    "asdfasdfasdfasd.md": "asdfasdfasdfasd",
+    "dasd-asdf-asda-sd-asdasd-asd-asd-f.md": "dasd asdf asda sd asdasd asd asd f",
+    "wer3412341234.md": "wer3412341234"
+  },
+  "order": [
+    "more-blah.md",
+    "title-1.md",
+    "note-3.md",
+    "note4.md",
+    "note-5.md",
+    "not6.md",
+    "7.md",
+    "8.md",
+    "z.md",
+    "asdfasdf.md",
+    "sdfasdfasd.md",
+    "asdfasdfasdfasd.md",
+    "dasd-asdf-asda-sd-asdasd-asd-asd-f.md",
+    "wer3412341234.md"
+  ]
 }
