@@ -33,3 +33,19 @@
 .note-item-row:hover .note-delete-btn {
   opacity: 1 !important;
 }
+
+/* Inline "+ New Note" affordance: revealed when its gap is active */
+.note-add-affordance {
+  transition: opacity 0.12s ease;
+}
+
+/* Empty-notebook create zone: reveal the button on hover */
+.note-empty-zone .note-empty-btn {
+  transition: opacity 0.12s ease;
+}
+.note-empty-zone:hover .note-empty-btn {
+  opacity: 1 !important;
+}
+.note-empty-zone:hover .note-empty-prompt {
+  opacity: 0 !important;
+}

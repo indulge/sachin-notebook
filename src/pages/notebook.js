@@ -201,6 +201,7 @@ function Sidebar({ notebooks, selected, onSelect, onNewNotebook, loading, onRefr
 function ExpandableNote({
   note, title, updatedAt, expanded, onToggle, onLoad, onSave, deleteSlot,
   index, onDragStart, onHover, onDropAt, onDragEnd, dragging, dragActive,
+  onMouseEnter, onMouseLeave,
 }) {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState('');
@@ -267,6 +268,8 @@ function ExpandableNote({
         ...(dragging ? s.noteItemDragging : {}),
       }}
       className="note-item-row"
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       onDragOver={e => {
         if (!dragActive) return;
         e.preventDefault();
@@ -361,13 +364,100 @@ function ExpandableNote({
   );
 }
 
+// ── Draft note (a blank, unsaved note edited inline) ──────────────────────────
+
+function DraftNote({ onSave, onDiscard }) {
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [renderMode, setRenderMode] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const titleRef = useRef(null);
+
+  useEffect(() => { titleRef.current?.focus(); }, []);
+
+  const canSave = !!(title.trim() || content.trim());
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(title, content);
+      // On success the parent unmounts this draft — don't touch state after.
+    } catch (err) {
+      setError(err.message || 'Save failed.');
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ ...s.noteItem, ...s.noteItemExpanded, ...s.draftItem }}>
+      <div style={s.tileHeader}>
+        <span style={s.noteIcon}>📝</span>
+        <span style={{ flex: 1, fontWeight: 600, color: 'var(--ifm-color-primary)' }}>New note</span>
+        <button onClick={onDiscard} style={{ ...s.btn, ...s.btnGhost }} disabled={saving}>Discard</button>
+      </div>
+      <div style={s.tileBody}>
+        <div style={s.tileToolbar}>
+          <div style={s.segmented}>
+            <button onClick={() => setRenderMode(false)} style={{ ...s.segment, ...(!renderMode ? s.segmentActive : {}) }}>✎ Edit</button>
+            <button onClick={() => setRenderMode(true)} style={{ ...s.segment, ...(renderMode ? s.segmentActive : {}) }}>👁 Preview</button>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {error && <span style={{ fontSize: 12, color: '#e53e3e' }}>{error}</span>}
+            <button
+              onClick={handleSave}
+              disabled={saving || !canSave}
+              style={{ ...s.btn, ...(canSave ? s.btnPrimary : s.btnSaved) }}
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+          </div>
+        </div>
+        {renderMode ? (
+          <BrowserOnly fallback={<div style={s.tilePreview}>Loading preview…</div>}>
+            {() => {
+              const ReactMarkdown = require('react-markdown').default;
+              return (
+                <div style={s.tilePreview}>
+                  <h2 style={s.previewTitle}>{title.trim() || 'Untitled'}</h2>
+                  <ReactMarkdown>{content}</ReactMarkdown>
+                </div>
+              );
+            }}
+          </BrowserOnly>
+        ) : (
+          <>
+            <input
+              ref={titleRef}
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              placeholder="Note title"
+              style={{ ...s.input, ...s.titleInput }}
+            />
+            <textarea
+              value={content}
+              onChange={e => setContent(e.target.value)}
+              placeholder="Write your note in Markdown…"
+              style={{ ...s.textarea, ...s.tileTextarea }}
+            />
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Note list ───────────────────────────────────────────────────────────────
 
-function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, syncProgress, metadata, onLoadNote, onSaveNote, onReorder }) {
+function NoteList({ notebook, notes, loading, onDeleteNote, syncing, syncProgress, metadata, onLoadNote, onSaveNote, onReorder, onCreateNote }) {
   const [confirmingDelete, setConfirmingDelete] = useState(null);
   const [expanded, setExpanded] = useState(() => new Set());
   const [dragName, setDragName] = useState(null);
   const [dropIndex, setDropIndex] = useState(null); // insertion slot: 0..N
+  const [hoverIndex, setHoverIndex] = useState(null); // tile index whose "add below" affordance is shown
+  const [draftAfter, setDraftAfter] = useState(null); // tile index to insert a blank draft after; -1 = top/empty
 
   // Collapse everything when switching notebooks.
   useEffect(() => {
@@ -375,9 +465,26 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
     setConfirmingDelete(null);
     setDragName(null);
     setDropIndex(null);
+    setHoverIndex(null);
+    setDraftAfter(null);
   }, [notebook.name]);
 
   const orderedNotes = orderNotes(notes, metadata?.order);
+  const hasDraft = draftAfter !== null;
+
+  const startDraft = (afterIndex) => {
+    setHoverIndex(null);
+    setDraftAfter(afterIndex);
+  };
+
+  const handleDraftSave = async (title, content) => {
+    const displayNames = orderedNotes.map(n => n.name);
+    const at = draftAfter;
+    const preceding = displayNames.slice(0, at + 1);
+    const following = displayNames.slice(at + 1);
+    await onCreateNote(preceding, following, title, content);
+    setDraftAfter(null);
+  };
 
   const toggle = (name) => {
     setExpanded(prev => {
@@ -411,17 +518,36 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
     setDropIndex(null);
   };
 
-  // A thin insertion line shown between/around tiles while dragging. It is also
-  // a drop target, so the gaps (top, between, bottom) are all droppable.
-  const renderSeparator = (slot) => (
-    <div
-      style={s.dropSeparator}
-      onDragOver={e => { if (dragName != null) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; hover(slot); } }}
-      onDrop={e => { e.preventDefault(); commitDrop(); }}
-    >
-      <div style={{ ...s.dropSeparatorLine, ...(dropIndex === slot ? s.dropSeparatorLineActive : {}) }} />
-    </div>
-  );
+  // The gap between/around tiles. Doubles as (a) the drag drop target showing an
+  // insertion line, and (b) the hover zone that reveals a "+ New Note" button to
+  // insert a blank note below tile `slot - 1`.
+  const renderSeparator = (slot) => {
+    const belowIndex = slot - 1; // the tile this gap sits below
+    const canAdd = belowIndex >= 0 && !hasDraft && dragName == null;
+    const showAdd = canAdd && hoverIndex === belowIndex;
+    return (
+      <div
+        style={s.dropSeparator}
+        onDragOver={e => { if (dragName != null) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; hover(slot); } }}
+        onDrop={e => { e.preventDefault(); commitDrop(); }}
+        onMouseEnter={() => { if (canAdd) setHoverIndex(belowIndex); }}
+        onMouseLeave={() => { if (canAdd) setHoverIndex(prev => (prev === belowIndex ? null : prev)); }}
+      >
+        <div style={{ ...s.dropSeparatorLine, ...(dropIndex === slot ? s.dropSeparatorLineActive : {}) }} />
+        {showAdd && (
+          <div className="note-add-affordance" style={s.addAffordance}>
+            <button
+              style={s.addBtn}
+              onClick={() => startDraft(belowIndex)}
+              title="Insert a new note here"
+            >
+              + New Note
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const handleDeleteClick = (e, note) => {
     e.stopPropagation();
@@ -443,7 +569,13 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
     <div style={s.panel}>
       <div style={s.panelHeader}>
         <span style={{ fontWeight: 600, fontSize: 16 }}>{notebook.name}</span>
-        <button onClick={onNewNote} style={{ ...s.btn, ...s.btnPrimary }}>+ New Note</button>
+        <button
+          onClick={() => startDraft(orderedNotes.length - 1)}
+          disabled={hasDraft}
+          style={{ ...s.btn, ...s.btnPrimary, ...(hasDraft ? s.btnDisabled : {}) }}
+        >
+          + New Note
+        </button>
       </div>
       <div style={s.syncBarTrack}>
         <div style={{
@@ -455,8 +587,16 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
       </div>
       <div style={s.noteListBody}>
         {loading && <div style={s.hint}>Loading notes…</div>}
-        {!loading && notes.length === 0 && (
-          <div style={s.hint}>No notes yet. Create your first one.</div>
+        {!loading && orderedNotes.length === 0 && !hasDraft && (
+          <div className="note-empty-zone" style={s.emptyZone} onClick={() => startDraft(-1)}>
+            <span className="note-empty-prompt" style={s.emptyPrompt}>No notes yet</span>
+            <button className="note-empty-btn" style={s.emptyAddBtn} onClick={() => startDraft(-1)}>
+              + Create new Note
+            </button>
+          </div>
+        )}
+        {!loading && orderedNotes.length === 0 && hasDraft && (
+          <DraftNote onSave={handleDraftSave} onDiscard={() => setDraftAfter(null)} />
         )}
         {orderedNotes.map((note, i) => {
           const title = metadata?.titles?.[note.name] || note.name.replace(/\.mdx?$/, '');
@@ -471,6 +611,7 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
               🗑
             </button>
           );
+          const canHover = !hasDraft && dragName == null;
           return (
             <React.Fragment key={note.name}>
               {renderSeparator(i)}
@@ -490,7 +631,12 @@ function NoteList({ notebook, notes, loading, onNewNote, onDeleteNote, syncing, 
                 onDragEnd={handleDragEnd}
                 dragging={dragName === note.name}
                 dragActive={dragName != null}
+                onMouseEnter={() => { if (canHover) setHoverIndex(i); }}
+                onMouseLeave={() => { if (canHover) setHoverIndex(prev => (prev === i ? null : prev)); }}
               />
+              {draftAfter === i && (
+                <DraftNote onSave={handleDraftSave} onDiscard={() => setDraftAfter(null)} />
+              )}
             </React.Fragment>
           );
         })}
@@ -1149,6 +1295,37 @@ export default function NotebookPage() {
     setNotebookMetadata(prev => ({ ...prev, order: newOrder, sha: newMetaSha }));
   }, [selectedNotebook, notebookMetadata, pushMetadataUpdate]);
 
+  // Create a brand-new note from an inline draft, placed between `preceding` and
+  // `following` (arrays of existing note filenames in display order).
+  const createNoteInline = useCallback(async (preceding, following, title, content) => {
+    const noteTitle = title.trim() || 'untitled';
+    const fileName = `${slugify(noteTitle)}-${Date.now()}.md`;
+    const filePath = `${DOCS_PATH}/${selectedNotebook.name}/${fileName}`;
+    const res = await fetch(`${API}/${filePath}`, {
+      method: 'PUT',
+      headers: authHeaders(),
+      body: JSON.stringify({ message: `Create note: ${noteTitle}`, content: b64Encode(content), branch: BRANCH }),
+    });
+    if (!res.ok) {
+      let msg = 'Create failed.';
+      try { msg = (await res.json()).message; } catch {}
+      throw new Error(msg);
+    }
+    const resData = await res.json();
+    const newSha = resData.content?.sha ?? null;
+
+    const newOrder = [...preceding, fileName, ...following];
+    const newTitles = { ...notebookMetadata.titles, [fileName]: noteTitle };
+    const newUpdated = { ...notebookMetadata.updated, [fileName]: Date.now() };
+    const newMetaSha = await pushMetadataUpdate(selectedNotebook, newTitles, newOrder, newUpdated, notebookMetadata.sha);
+    setNotebookMetadata({ titles: newTitles, order: newOrder, updated: newUpdated, sha: newMetaSha });
+
+    // Surface the new file as a real tile right away.
+    setNotes(prev => prev.some(n => n.name === fileName)
+      ? prev
+      : [...prev, { name: fileName, sha: newSha, type: 'file', path: filePath }]);
+  }, [authHeaders, selectedNotebook, notebookMetadata, pushMetadataUpdate]);
+
   const saveNote = async (title, content) => {
     setConflictBanner(false);
     setSaving(true);
@@ -1359,12 +1536,12 @@ export default function NotebookPage() {
               notebook={selectedNotebook}
               notes={notes}
               loading={loadingNotes}
-              onNewNote={openNewNote}
               onDeleteNote={deleteNote}
               metadata={notebookMetadata}
               onLoadNote={loadNoteContent}
               onSaveNote={saveNoteContent}
               onReorder={reorderNotes}
+              onCreateNote={createNoteInline}
               syncing={syncing}
               syncProgress={syncProgress}
             />
@@ -1564,6 +1741,72 @@ const s = {
   dropSeparatorLineActive: {
     backgroundColor: 'var(--ifm-color-primary)',
     boxShadow: '0 0 0 1px var(--ifm-color-primary)',
+  },
+  addAffordance: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: '50%',
+    transform: 'translateY(-50%)',
+    display: 'flex',
+    justifyContent: 'center',
+    pointerEvents: 'none',
+    zIndex: 6,
+  },
+  addBtn: {
+    pointerEvents: 'auto',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '3px 14px',
+    fontSize: 12,
+    fontWeight: 600,
+    color: 'var(--ifm-color-primary)',
+    background: 'var(--ifm-background-surface-color)',
+    border: '1px solid var(--ifm-color-primary)',
+    borderRadius: 14,
+    cursor: 'pointer',
+    boxShadow: '0 1px 5px rgba(0,0,0,0.14)',
+    whiteSpace: 'nowrap',
+  },
+  draftItem: {
+    boxShadow: '0 2px 14px rgba(0,0,0,0.10)',
+  },
+  btnDisabled: {
+    opacity: 0.45,
+    cursor: 'default',
+  },
+  emptyZone: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 180,
+    border: '1.5px dashed var(--ifm-color-emphasis-300)',
+    borderRadius: 10,
+    cursor: 'pointer',
+    position: 'relative',
+    gap: 0,
+  },
+  emptyPrompt: {
+    position: 'absolute',
+    fontSize: 14,
+    color: 'var(--ifm-color-emphasis-500)',
+    transition: 'opacity 0.12s ease',
+  },
+  emptyAddBtn: {
+    opacity: 0,
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    padding: '8px 18px',
+    fontSize: 14,
+    fontWeight: 600,
+    color: '#fff',
+    background: 'var(--ifm-color-primary)',
+    border: '1px solid var(--ifm-color-primary)',
+    borderRadius: 8,
+    cursor: 'pointer',
   },
   tileUpdated: {
     flexShrink: 0,
