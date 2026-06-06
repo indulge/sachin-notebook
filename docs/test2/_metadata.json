@@ -1,10 +1,12 @@
 {
   "titles": {
     "title1.md": "title1",
-    "title-1780779080958.md": "title"
+    "title-1780779080958.md": "title",
+    "title-1780779096229.md": "title"
   },
   "order": [
     "title1.md",
-    "title-1780779080958.md"
+    "title-1780779080958.md",
+    "title-1780779096229.md"
   ]
 }
