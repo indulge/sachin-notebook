@@ -1,168 +1,129 @@
-.heroBanner {
-  padding: 3rem 0 2rem;
-  text-align: center;
-  border-bottom: 1px solid var(--ifm-color-emphasis-200);
+/* ── Welcome dashboard ──────────────────────────────────────────────────────
+   A distraction-free hub: a soft radial gradient mesh laid over a fine grid,
+   a centered title, and two entry cards that bridge to reading and writing. */
+
+.pageBg {
+  position: relative;
+  background-color: var(--ifm-background-color);
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10%, rgba(26, 86, 219, 0.08), transparent 70%),
+    linear-gradient(var(--ifm-color-emphasis-200) 1px, transparent 1px),
+    linear-gradient(90deg, var(--ifm-color-emphasis-200) 1px, transparent 1px);
+  background-size: 100% 100%, 2.25rem 2.25rem, 2.25rem 2.25rem;
+  background-position: center top;
 }
 
-@media screen and (max-width: 996px) {
-  .heroBanner {
-    padding: 2rem;
+[data-theme='dark'] .pageBg {
+  background-image:
+    radial-gradient(60rem 30rem at 50% -10%, rgba(96, 165, 250, 0.12), transparent 70%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+}
+
+.hero {
+  padding: 4.5rem 0 3rem;
+  text-align: center;
+}
+
+.heroTitle {
+  font-size: clamp(2.25rem, 5vw, 3.25rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.heroTagline {
+  font-size: 1.1rem;
+  color: var(--ifm-color-emphasis-600);
+  margin-bottom: 2.75rem;
+}
+
+.entryGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.25rem;
+  max-width: 46rem;
+  margin: 0 auto;
+  text-align: left;
+}
+
+.entryCard {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  padding: 1.75rem;
+  border-radius: 16px;
+  border: 1px solid var(--ifm-color-emphasis-300);
+  background: var(--ifm-background-surface-color);
+  color: var(--ifm-font-color-base);
+  text-decoration: none;
+  box-shadow: 0 1px 2px rgba(17, 24, 39, 0.04);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.entryCard:hover {
+  text-decoration: none;
+  transform: translateY(-4px);
+  border-color: var(--ifm-color-primary);
+  box-shadow: 0 16px 40px rgba(17, 24, 39, 0.12);
+}
+
+/* The primary card leans into the brand: a tinted, text-forward call-to-action. */
+.entryCardPrimary {
+  background: linear-gradient(
+    160deg,
+    var(--ifm-color-primary) 0%,
+    var(--ifm-color-primary-darker) 100%
+  );
+  border-color: transparent;
+  color: #fff;
+}
+
+.entryCardPrimary:hover {
+  border-color: transparent;
+  box-shadow: 0 18px 44px rgba(26, 86, 219, 0.4);
+}
+
+.entryEyebrow {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.entryTitle {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+
+.entryDesc {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  opacity: 0.85;
+  margin-top: 0.15rem;
+}
+
+.entryCta {
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.entryCardSecondary .entryCta {
+  color: var(--ifm-color-primary);
+}
+
+@media screen and (max-width: 768px) {
+  .hero {
+    padding: 2.5rem 0 1.5rem;
+  }
+  .entryGrid {
+    grid-template-columns: 1fr;
   }
 }
 
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  margin-bottom: 1.5rem;
-}
-
-.breadcrumbs {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.95rem;
-  color: var(--ifm-color-emphasis-700);
-  min-width: 0;
-}
-
-.crumbSep {
-  color: var(--ifm-color-emphasis-400);
-}
-
-.crumbCurrent {
-  font-weight: 600;
-  color: var(--ifm-font-color-base);
-}
-
-.crumbLink {
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  color: var(--ifm-color-primary);
-  font: inherit;
-}
-
-.crumbLink:hover {
-  text-decoration: underline;
-}
-
-.refreshRow {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.refreshNote {
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-600);
-}
-
-.refreshNoteError {
-  color: var(--ifm-color-danger);
-}
-
-.notebookGrid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 1.25rem;
-}
-
-.notebookCard {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--ifm-color-emphasis-200);
-  border-radius: 12px;
-  padding: 1.25rem 1.4rem;
-  background: var(--ifm-background-surface-color);
-}
-
-.notebookHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.notebookTitle {
-  margin: 0;
-  font-size: 1.15rem;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-align: left;
-  color: var(--ifm-font-color-base);
-  font-weight: 700;
-}
-
-.notebookTitle:hover {
-  color: var(--ifm-color-primary);
-}
-
-.noteCount {
-  font-size: 0.8rem;
-  color: var(--ifm-color-emphasis-500);
-  white-space: nowrap;
-}
-
-.noteList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.noteRow {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.45rem 0;
-  border-top: 1px solid var(--ifm-color-emphasis-100);
-}
-
-.noteRow:first-child {
-  border-top: none;
-}
-
-.noteLink {
-  font-weight: 500;
-  min-width: 0;
-}
-
-.notePending {
-  font-weight: 500;
-  color: var(--ifm-color-emphasis-600);
-  min-width: 0;
-}
-
-.noteUpdated {
-  font-size: 0.78rem;
-  color: var(--ifm-color-emphasis-500);
-  white-space: nowrap;
-}
-
-.pendingBadge {
-  display: inline-block;
-  margin-left: 0.5rem;
-  padding: 0.05rem 0.45rem;
-  border-radius: 999px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--ifm-color-warning-darkest);
-  background: var(--ifm-color-warning-contrast-background);
-  border: 1px solid var(--ifm-color-warning-dark);
-  white-space: nowrap;
-}
-
-.emptyState {
-  text-align: center;
-  color: var(--ifm-color-emphasis-500);
-  padding: 3rem 0;
-}
+/* The notebook listing UI was removed from the home page; its styles went with
+   it. The home page is now just the hero + entry cards above. */

@@ -1,51 +1,212 @@
 /**
- * Any CSS included here will be global. The classic template
- * bundles Infima by default. Infima is a CSS framework designed to
- * work well for content-centric websites.
+ * Global styles. Infima provides the base; everything below is the
+ * "premium notebook" visual layer — color tokens, reading-area calibration,
+ * and the cosmetic hooks the writing-area components opt into by class name.
+ *
+ * This file is presentation only: no component reads it for behavior.
  */
 
-/* You can override the default Infima variables here. */
+/* ── Color tokens — Light ──────────────────────────────────────────────────── */
 :root {
-  --ifm-color-primary: #2e8555;
-  --ifm-color-primary-dark: #29784c;
-  --ifm-color-primary-darker: #277148;
-  --ifm-color-primary-darkest: #205d3b;
-  --ifm-color-primary-light: #33925d;
-  --ifm-color-primary-lighter: #359962;
-  --ifm-color-primary-lightest: #3cad6e;
+  /* Primary accent — a confident indigo-blue, not neon. */
+  --ifm-color-primary: #1a56db;
+  --ifm-color-primary-dark: #174dc5;
+  --ifm-color-primary-darker: #1649ba;
+  --ifm-color-primary-darkest: #123c99;
+  --ifm-color-primary-light: #3b6fe0;
+  --ifm-color-primary-lighter: #5783e5;
+  --ifm-color-primary-lightest: #8aa8ee;
+
+  /* Surfaces: a soft off-white page over crisp white cards. */
+  --ifm-background-color: #f9fafb;
+  --ifm-background-surface-color: #ffffff;
+
+  /* Borders / subtle fills — a calm grey scale. */
+  --ifm-color-emphasis-100: #f3f4f6;
+  --ifm-color-emphasis-200: #eef0f2;
+  --ifm-color-emphasis-300: #e5e7eb;
+
+  /* Text: warm near-black, never #000, to cut contrast fatigue. */
+  --ifm-font-color-base: #1f2937;
+  --ifm-heading-color: #111827;
+
   --ifm-code-font-size: 95%;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.1);
+  --docusaurus-highlighted-code-line-bg: rgba(26, 86, 219, 0.1);
+
+  /* Shared cosmetic tokens. */
+  --app-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --app-ring: 0 0 0 3px rgba(96, 165, 250, 0.25);
 }
 
-/* For readability concerns, you should choose a lighter palette in dark mode. */
+/* ── Color tokens — Dark (deep slate) ──────────────────────────────────────── */
 [data-theme='dark'] {
-  --ifm-color-primary: #25c2a0;
-  --ifm-color-primary-dark: #21af90;
-  --ifm-color-primary-darker: #1fa588;
-  --ifm-color-primary-darkest: #1a8870;
-  --ifm-color-primary-light: #29d5b0;
-  --ifm-color-primary-lighter: #32d8b4;
-  --ifm-color-primary-lightest: #4fddbf;
-  --docusaurus-highlighted-code-line-bg: rgba(0, 0, 0, 0.3);
+  --ifm-color-primary: #60a5fa;
+  --ifm-color-primary-dark: #4a93f8;
+  --ifm-color-primary-darker: #3d8af7;
+  --ifm-color-primary-darkest: #2376f4;
+  --ifm-color-primary-light: #79b4fb;
+  --ifm-color-primary-lighter: #93c3fc;
+  --ifm-color-primary-lightest: #bbd9fd;
+
+  --ifm-background-color: #0b0f19;
+  --ifm-background-surface-color: #111827;
+
+  --ifm-color-emphasis-100: #161c28;
+  --ifm-color-emphasis-200: #1f2937;
+  --ifm-color-emphasis-300: #374151;
+
+  --ifm-font-color-base: #e5e7eb;
+  --ifm-heading-color: #f9fafb;
+
+  --docusaurus-highlighted-code-line-bg: rgba(96, 165, 250, 0.15);
 }
 
-/* Show delete button on note row hover */
+/* ── Global micro-interactions ─────────────────────────────────────────────── */
+/* Scoped to interactive elements so static layout never animates unexpectedly. */
+a,
+button,
+.button,
+input,
+textarea,
+select,
+.menu__link,
+.navbar__link,
+[role='button'] {
+  transition: all 0.25s var(--app-ease);
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   READING AREA  (/read)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Comfortable measure + line length for long-form markdown. */
+.theme-doc-markdown.markdown {
+  max-width: 45rem;
+  margin-inline: auto;
+  line-height: 1.7;
+}
+
+.theme-doc-markdown.markdown p,
+.theme-doc-markdown.markdown li {
+  line-height: 1.7;
+}
+
+/* Sidebar: recede the unselected nodes, mark the active doc with a thin
+   left accent rather than a heavy filled block. */
+.menu__link {
+  opacity: 0.6;
+  border-radius: 6px;
+}
+
+.menu__link:hover {
+  opacity: 1;
+  background: var(--ifm-color-emphasis-100);
+}
+
+.menu__link--active {
+  opacity: 1;
+  background: transparent;
+  border-radius: 0;
+  border-left: 2px solid var(--ifm-color-primary);
+  font-weight: 600;
+}
+
+.menu__link--active:hover {
+  background: transparent;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   WRITING AREA  (notebook workspace — cosmetic hooks for inline-styled components)
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Show delete button on note row hover. */
 .note-item-row:hover .note-delete-btn {
   opacity: 1 !important;
 }
 
-/* Inline "+ New Note" affordance: revealed when its gap is active */
-.note-add-affordance {
-  transition: opacity 0.12s ease;
+/* Draft tile: glassmorphic — translucent, blurred, hair-thin border. */
+.note-draft-tile {
+  background: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  border: 1px solid rgba(17, 24, 39, 0.08) !important;
+  box-shadow: 0 10px 34px rgba(17, 24, 39, 0.1) !important;
 }
 
-/* Empty-notebook create zone: reveal the button on hover */
+[data-theme='dark'] .note-draft-tile {
+  background: rgba(17, 24, 39, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 10px 34px rgba(0, 0, 0, 0.45) !important;
+}
+
+/* Hover-to-insert: the divider gap is an invisible track. On hover a fine
+   gradient hairline fades in; the floating "+" rides on top of it. */
+.note-add-affordance {
+  transition: opacity 0.18s var(--app-ease);
+}
+
+.note-insert-line {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 2px;
+  border-radius: 2px;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ifm-color-primary) 35%,
+    var(--ifm-color-primary) 65%,
+    transparent
+  );
+  transition: opacity 0.25s var(--app-ease);
+}
+
+.note-insert-track:hover .note-insert-line {
+  opacity: 1;
+}
+
+.note-insert-btn {
+  transform: scale(0.85);
+  transition: transform 0.2s var(--app-ease), box-shadow 0.2s var(--app-ease);
+}
+
+.note-insert-btn:hover {
+  transform: scale(1);
+  box-shadow: 0 4px 14px rgba(26, 86, 219, 0.45);
+}
+
+/* Active editor surface: soft outer glow instead of a hard browser focus ring. */
+.note-item-row textarea:focus,
+.note-item-row input:focus {
+  box-shadow: var(--app-ring);
+  border-color: var(--ifm-color-primary) !important;
+}
+
+/* Empty-notebook create zone: reveal the button on hover. */
 .note-empty-zone .note-empty-btn {
-  transition: opacity 0.12s ease;
+  transition: opacity 0.18s var(--app-ease);
 }
 .note-empty-zone:hover .note-empty-btn {
   opacity: 1 !important;
 }
 .note-empty-zone:hover .note-empty-prompt {
   opacity: 0 !important;
+}
+
+/* Sync status dock: subtle pulse on the amber (in-flight) state. */
+@keyframes app-dot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.app-dock-dot--active {
+  animation: app-dot-pulse 1.2s var(--app-ease) infinite;
 }

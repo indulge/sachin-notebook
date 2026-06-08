@@ -1,6 +1,6 @@
 // Shared, pure helpers for working with the notebook repo and its per-notebook
-// _metadata.json files. Imported by both the browser (src/pages/notebook.js,
-// src/pages/index.js) and Node at build time (src/lib/notebooksFs.js, which
+// _metadata.json files. Imported by both the browser (the notebook workspace
+// under src/components/, src/pages/index.js) and Node at build time (src/lib/notebooksFs.js, which
 // feeds sidebars.js and the notebook-snapshot plugin). Keep this module free of
 // browser- or Node-only APIs at the top level — atob/btoa are globals in both.
 
