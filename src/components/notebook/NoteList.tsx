@@ -49,7 +49,8 @@ export default function NoteList({
   onCreateNote,
 }: Props) {
   const ui = useNoteListInteractions(notebook.name);
-  const { dragName, dropIndex, hoverIndex, draftAfter, confirmingDelete, expanded } = ui.state;
+  const { dragName, dropIndex, hoverIndex, draftAfter, confirmingDelete, expanded, activeInsert } =
+    ui.state;
 
   const orderedNotes = orderNotes(notes, metadata?.order);
   const { hasDraft, dragActive } = ui;
@@ -89,11 +90,17 @@ export default function NoteList({
   const renderSeparator = (slot: number) => {
     const belowIndex = slot - 1; // the tile this gap sits below
     const canAdd = belowIndex >= 0 && !hasDraft && dragName == null;
-    const showAdd = canAdd && hoverIndex === belowIndex;
+    const isActive = canAdd && activeInsert === slot;
+    // Reveal the "+" on hover, or keep it pinned when this gap is the anchor.
+    const showAdd = canAdd && (hoverIndex === belowIndex || isActive);
     return (
       <div
-        className="note-insert-track"
+        className={`note-insert-track${isActive ? ' note-insert-track--active' : ''}`}
         style={s.dropSeparator}
+        onClick={() => {
+          // Click the gap (not the "+") to pin/unpin the active insertion point.
+          if (canAdd) ui.setActiveInsert(slot);
+        }}
         onDragOver={(e) => {
           if (dragName != null) {
             e.preventDefault();
@@ -121,7 +128,10 @@ export default function NoteList({
             <button
               className="note-insert-btn"
               style={s.addBtn}
-              onClick={() => ui.startDraft(belowIndex)}
+              onClick={(e) => {
+                e.stopPropagation();
+                ui.startDraft(belowIndex);
+              }}
               title="Insert a new note here"
               aria-label="Insert a new note here"
             >
@@ -138,11 +148,18 @@ export default function NoteList({
       <div style={s.panelHeader}>
         <span style={{ fontWeight: 600, fontSize: 16 }}>{notebook.name}</span>
         <button
-          onClick={() => ui.startDraft(orderedNotes.length - 1)}
+          onClick={() =>
+            ui.startDraft(activeInsert != null ? activeInsert - 1 : orderedNotes.length - 1)
+          }
           disabled={hasDraft}
           style={{ ...s.btn, ...s.btnPrimary, ...(hasDraft ? s.btnDisabled : {}) }}
+          title={
+            activeInsert != null
+              ? 'Insert a new note at the pinned insertion point'
+              : 'Add a new note at the end'
+          }
         >
-          + New Note
+          + New Note{activeInsert != null ? ' ↳' : ''}
         </button>
       </div>
       <div style={s.syncBarTrack}>

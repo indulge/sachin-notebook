@@ -13,6 +13,7 @@ import ErrorBoundary from '@site/src/components/ErrorBoundary';
 import EmptyState from '@site/src/components/notebook/EmptyState';
 import NewNotebookPanel from '@site/src/components/notebook/NewNotebookPanel';
 import NoteEditor from '@site/src/components/notebook/NoteEditor';
+import MiniNotebookGrid from '@site/src/components/notebook/MiniNotebookGrid';
 import NoteList from '@site/src/components/notebook/NoteList';
 import NotebookModal from '@site/src/components/notebook/NotebookModal';
 import SaveModal from '@site/src/components/notebook/SaveModal';
@@ -150,6 +151,14 @@ function Workspace() {
           step={nb.notebookModal.step}
           error={nb.notebookModal.error}
           onClose={nb.closeNotebookModal}
+        />
+      )}
+      {nb.selectedNotebook && (
+        <MiniNotebookGrid
+          notebookName={nb.selectedNotebook.name}
+          notes={nb.notes}
+          metadata={nb.metadata}
+          onOpenNote={nb.openNote}
         />
       )}
       <SyncDock saving={nb.saving} syncing={nb.syncing} refreshing={nb.refreshing} />

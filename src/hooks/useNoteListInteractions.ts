@@ -23,6 +23,9 @@ export interface NoteListState {
   hoverIndex: number | null;
   /** Tile index to insert a blank draft after; -1 = top/empty; null = none. */
   draftAfter: number | null;
+  /** Persistent "active insertion point" — the gap slot (0..N) a new clip will
+   *  stack into, set by clicking a gap. null = no anchor pinned. */
+  activeInsert: number | null;
 }
 
 type Action =
@@ -35,7 +38,8 @@ type Action =
   | { type: 'setDropIndex'; index: number | null }
   | { type: 'setHoverIndex'; index: number | null }
   | { type: 'startDraft'; afterIndex: number }
-  | { type: 'closeDraft' };
+  | { type: 'closeDraft' }
+  | { type: 'setActiveInsert'; slot: number | null };
 
 const INITIAL: NoteListState = {
   expanded: new Set(),
@@ -44,6 +48,7 @@ const INITIAL: NoteListState = {
   dropIndex: null,
   hoverIndex: null,
   draftAfter: null,
+  activeInsert: null,
 };
 
 function reducer(state: NoteListState, action: Action): NoteListState {
@@ -61,8 +66,8 @@ function reducer(state: NoteListState, action: Action): NoteListState {
     case 'cancelDelete':
       return { ...state, confirmingDelete: null };
     case 'dragStart':
-      // A drag supersedes any hover affordance.
-      return { ...state, dragName: action.name, hoverIndex: null };
+      // A drag supersedes any hover affordance + pinned anchor.
+      return { ...state, dragName: action.name, hoverIndex: null, activeInsert: null };
     case 'dragEnd':
       return { ...state, dragName: null, dropIndex: null };
     case 'setDropIndex':
@@ -70,9 +75,14 @@ function reducer(state: NoteListState, action: Action): NoteListState {
     case 'setHoverIndex':
       return state.hoverIndex === action.index ? state : { ...state, hoverIndex: action.index };
     case 'startDraft':
-      return { ...state, draftAfter: action.afterIndex, hoverIndex: null };
+      // Opening a draft consumes the anchor — it has served its purpose.
+      return { ...state, draftAfter: action.afterIndex, hoverIndex: null, activeInsert: null };
     case 'closeDraft':
       return { ...state, draftAfter: null };
+    case 'setActiveInsert':
+      return state.activeInsert === action.slot
+        ? { ...state, activeInsert: null } // clicking the pinned gap again clears it
+        : { ...state, activeInsert: action.slot };
     default:
       return state;
   }
@@ -91,6 +101,7 @@ export interface NoteListInteractions {
   setHoverIndex: (index: number | null) => void;
   startDraft: (afterIndex: number) => void;
   closeDraft: () => void;
+  setActiveInsert: (slot: number | null) => void;
 }
 
 export function useNoteListInteractions(notebookName: string): NoteListInteractions {
@@ -113,6 +124,7 @@ export function useNoteListInteractions(notebookName: string): NoteListInteracti
       setHoverIndex: (index: number | null) => dispatch({ type: 'setHoverIndex', index }),
       startDraft: (afterIndex: number) => dispatch({ type: 'startDraft', afterIndex }),
       closeDraft: () => dispatch({ type: 'closeDraft' }),
+      setActiveInsert: (slot: number | null) => dispatch({ type: 'setActiveInsert', slot }),
     }),
     [],
   );

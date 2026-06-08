@@ -130,7 +130,7 @@ export const s: Record<string, CSSProperties> = {
   noteListBody: {
     flex: 1,
     overflowY: 'auto',
-    padding: '16px 24px',
+    padding: '12px 20px',
   },
   noteItem: {
     display: 'flex',
@@ -270,7 +270,7 @@ export const s: Record<string, CSSProperties> = {
     alignItems: 'center',
     gap: 10,
     width: '100%',
-    padding: '12px 16px',
+    padding: '9px 14px',
     cursor: 'pointer',
     boxSizing: 'border-box',
   },

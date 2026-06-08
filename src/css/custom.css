@@ -79,16 +79,77 @@ select,
    READING AREA  (/read)
    ════════════════════════════════════════════════════════════════════════════ */
 
-/* Comfortable measure + line length for long-form markdown. */
+/* Snippet stream: the page is a constrained column of discrete "clip" cards
+   rather than one continuous sheet. Each top-level markdown block gets a flat
+   card wrapper with a fine boundary and tight vertical rhythm — dense,
+   research-tool aesthetic à la Google Notebook. */
 .theme-doc-markdown.markdown {
-  max-width: 45rem;
+  max-width: 46rem;
   margin-inline: auto;
-  line-height: 1.7;
+  line-height: 1.55;
+  font-size: 0.94rem;
 }
 
-.theme-doc-markdown.markdown p,
+.theme-doc-markdown.markdown > :is(p, ul, ol, blockquote, pre, table, h2, h3, h4, h5, img, .tabs-container, details) {
+  background: var(--ifm-background-surface-color);
+  border: 1px solid var(--ifm-color-emphasis-200);
+  border-radius: 8px;
+  padding: 0.55rem 0.8rem;
+  margin: 0 0 0.5rem;
+  scroll-margin-top: 5rem;
+  transition: border-color 0.2s var(--app-ease), box-shadow 0.2s var(--app-ease);
+}
+
+/* Lift a clip on hover, like picking up a research fragment. */
+.theme-doc-markdown.markdown > :is(p, ul, ol, blockquote, table):hover {
+  border-color: var(--ifm-color-emphasis-300);
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.05);
+}
+
+/* Headings read as section dividers, not boxed clips. */
+.theme-doc-markdown.markdown > :is(h2, h3, h4, h5) {
+  background: transparent;
+  border: none;
+  border-left: 2px solid var(--ifm-color-primary);
+  border-radius: 0;
+  padding: 0.1rem 0 0.1rem 0.65rem;
+  margin: 1.1rem 0 0.5rem;
+  line-height: 1.25;
+}
+
+/* Code/preformatted clips keep their own surface; just tighten the frame. */
+.theme-doc-markdown.markdown > pre {
+  padding: 0;
+  overflow: hidden;
+}
+
+.theme-doc-markdown.markdown > ul,
+.theme-doc-markdown.markdown > ol {
+  padding-left: 1.8rem;
+}
+
+.theme-doc-markdown.markdown > p,
 .theme-doc-markdown.markdown li {
-  line-height: 1.7;
+  line-height: 1.55;
+}
+
+.theme-doc-markdown.markdown li + li {
+  margin-top: 0.15rem;
+}
+
+/* Compact the oversized article title and trim page chrome for density. */
+.theme-doc-markdown.markdown > header h1,
+.theme-doc-markdown.markdown > h1 {
+  font-size: 1.7rem;
+  line-height: 1.2;
+  margin-bottom: 0.75rem;
+}
+
+/* Last-updated / edit meta as muted micro-text. */
+.theme-doc-footer,
+.theme-last-updated {
+  font-size: 0.72rem;
+  color: var(--ifm-color-emphasis-500);
 }
 
 /* Sidebar: recede the unselected nodes, mark the active doc with a thin
@@ -165,8 +226,24 @@ select,
   transition: opacity 0.25s var(--app-ease);
 }
 
+.note-insert-track {
+  cursor: pointer;
+}
+
 .note-insert-track:hover .note-insert-line {
   opacity: 1;
+}
+
+/* Active Insertion Anchor: a pinned gap stays lit as a persistent focus track,
+   so the next clip stacks exactly here. */
+.note-insert-track--active {
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--ifm-color-primary) 9%, transparent);
+}
+
+.note-insert-track--active .note-insert-line {
+  opacity: 1;
+  box-shadow: 0 0 7px color-mix(in srgb, var(--ifm-color-primary) 55%, transparent);
 }
 
 .note-insert-btn {
