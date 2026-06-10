@@ -286,6 +286,8 @@ export const s: Record<string, CSSProperties> = {
     padding: '14px 16px',
     cursor: 'default',
     backgroundColor: 'var(--ifm-background-color)',
+    display: 'flex',
+    flexDirection: 'column',
   },
   tileToolbar: {
     display: 'flex',
@@ -299,9 +301,9 @@ export const s: Record<string, CSSProperties> = {
     fontSize: 15,
   },
   tileTextarea: {
-    minHeight: 220,
-    maxHeight: 480,
     flex: 'none',
+    height: 'calc(100vh - 280px)',
+    minHeight: 300,
   },
   noteIcon: { fontSize: 16, flexShrink: 0 },
   deleteBtn: {
