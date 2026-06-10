@@ -40,8 +40,7 @@ const config = {
         docs: {
           routeBasePath: 'read',
           sidebarPath: './sidebars.js',
-          editUrl: 'https://github.com/indulge/sachin-notebook/tree/main/',
-          showLastUpdateTime: true,
+showLastUpdateTime: true,
         },
         blog: false,
         theme: {
